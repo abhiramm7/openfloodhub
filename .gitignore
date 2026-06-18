@@ -1,0 +1,14 @@
+# Local cache of hourly observations + forcings (override with $FLOOD_DATA_DIR)
+/data/
+# Inference outputs
+/outputs/
+# Secrets
+.env.local
+.env
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.ipynb_checkpoints/

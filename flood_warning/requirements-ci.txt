@@ -1,0 +1,6 @@
+# Minimal Python deps for the live-inference cron + Pages deploy workflow.
+# Smaller than the full training environment — no LSTM/MultiMet/Caravan stuff.
+torch==2.5.1
+numpy==2.1.*
+pandas==2.3.*
+pyarrow
