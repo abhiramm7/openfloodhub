@@ -1,27 +1,44 @@
-"""NOAA NWPS API integration — pulls official flood stages, NWS observed/
-forecast stage, and National Water Model streamflow for our gauges.
+"""NOAA / NWS data overlays for the CNN forecast.
 
-  https://api.water.noaa.gov/nwps/v1/docs/
+These series are *comparison overlays* — they ride alongside the CNN's own
+forecast in the prediction output, they are not fed back into the model.
 
-What we use:
-  /gauges/{usgsId}                   gauge metadata, current obs, NWS
-                                     forecast, official flood thresholds
-  /reaches/{reachId}/streamflow      NOAA National Water Model series in
-                                     several horizons; we use short_range
-                                     (next 18 hours, hourly)
+Sources, all unauthenticated JSON:
 
-All endpoints are unauthenticated JSON. ft³/s -> m³/s conversion for the
-NWM output so it lines up with our CNN's units on the chart.
+  NWPS  https://api.water.noaa.gov/nwps/v1/docs/
+    /gauges/{usgsId}                 gauge metadata, official flood
+                                     thresholds, current obs + NWS forecast
+    /reaches/{reachId}/streamflow    NOAA National Water Model streamflow:
+                                       analysisAssimilation  best-estimate "observed"
+                                       shortRange            next ~18h hourly
+                                       mediumRangeBlend      next ~10d hourly
+
+  NWS   https://api.weather.gov/
+    /points/{lat},{lon} -> /gridpoints/...   quantitativePrecipitation (QPF),
+                                             forecast rainfall in mm
+
+  IEM   https://mesonet.agron.iastate.edu/
+    /iemre/multiday/...              MRMS radar QPE, observed daily rainfall
+
+Flow is converted ft³/s -> m³/s and precip inches -> mm so everything lines
+up with the CNN's units on the chart.
 """
 from __future__ import annotations
 
 import json
+import re
 import urllib.error
 import urllib.request
 
+import pandas as pd
+
 NWPS = 'https://api.water.noaa.gov/nwps/v1'
-UA = 'dmv-flood-watch'
+NWS = 'https://api.weather.gov'
+IEM = 'https://mesonet.agron.iastate.edu'
+# NWS asks for a descriptive User-Agent with contact info.
+UA = 'openfloodhub (https://github.com/abhiramm7/openfloodhub)'
 CFS_TO_M3S = 0.0283168
+IN_TO_MM = 25.4
 
 
 def _get(url: str, timeout: int = 30) -> dict | None:
@@ -30,7 +47,7 @@ def _get(url: str, timeout: int = 30) -> dict | None:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read().decode())
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError) as e:
-        print(f'   ! NOAA {url[-60:]}: {e}')
+        print(f'   ! NOAA {url[-70:]}: {e}')
         return None
 
 
@@ -91,32 +108,166 @@ def fetch_gauge(usgs_id: str) -> dict | None:
     }
 
 
-def fetch_nwm_short_range(reach_id: str) -> list[dict]:
-    """NWM short-range streamflow forecast — next ~18 hours hourly, in cfs.
-    Returns [{t, flow_m3s}, ...] converted to m³/s for chart parity."""
-    if not reach_id:
-        return []
-    d = _get(f'{NWPS}/reaches/{reach_id}/streamflow?series=short_range')
-    if not d:
-        return []
-    series = d.get('shortRange', {}).get('series', {})
+# --------------------------------------------------------------------------
+# NOAA National Water Model streamflow (analysis + short + medium range)
+# --------------------------------------------------------------------------
+
+def _to_m3s(flow, units: str | None) -> float:
+    """NWM streamflow is published in ft³/s; convert to m³/s. If the API ever
+    reports metric units we leave the value alone."""
+    f = float(flow)
+    if units and ('ft' in units or 'cfs' in units.lower()):
+        return round(f * CFS_TO_M3S, 3)
+    return round(f, 3)
+
+
+def _extract_series(payload: dict, key: str) -> list[dict]:
+    """Pull one NWM series out of a /streamflow response. Returns
+    [{t, flow_m3s}, ...] sorted by time, or [] if absent/empty."""
+    block = payload.get(key) or {}
+    series = block.get('series') or {}
+    units = series.get('units')
     out = []
     for row in series.get('data', []):
         try:
-            out.append({
-                't': row['validTime'],
-                'flow_m3s': round(float(row['flow']) * CFS_TO_M3S, 3),
-            })
+            out.append({'t': row['validTime'], 'flow_m3s': _to_m3s(row['flow'], units)})
+        except (KeyError, ValueError, TypeError):
+            continue
+    out.sort(key=lambda r: r['t'])
+    return out
+
+
+def fetch_nwm_streamflow(reach_id: str) -> dict:
+    """One request to the NWPS reach endpoint returns every NWM series at once.
+    Returns {short, medium, analysis} as lists of {t, flow_m3s} in m³/s.
+
+      short    next ~18h hourly      (short_range)
+      medium   next ~10d hourly      (mediumRangeBlend, deterministic blend
+                                       of the medium-range ensemble)
+      analysis recent best-estimate  (analysisAssimilation) — NWM's "observed"
+    """
+    empty = {'short': [], 'medium': [], 'analysis': []}
+    if not reach_id:
+        return empty
+    d = _get(f'{NWPS}/reaches/{reach_id}/streamflow')
+    if not d:
+        return empty
+    medium = _extract_series(d, 'mediumRangeBlend') or _extract_series(d, 'mediumRange')
+    return {
+        'short': _extract_series(d, 'shortRange'),
+        'medium': medium,
+        'analysis': _extract_series(d, 'analysisAssimilation'),
+    }
+
+
+def fetch_nwm_short_range(reach_id: str) -> list[dict]:
+    """NWM short-range streamflow forecast — next ~18 hours hourly, m³/s.
+    Kept for backwards compatibility; prefer fetch_nwm_streamflow()."""
+    return fetch_nwm_streamflow(reach_id)['short']
+
+
+# --------------------------------------------------------------------------
+# NWS quantitative precipitation forecast (QPF) — forecast rainfall, mm
+# --------------------------------------------------------------------------
+
+_DUR = re.compile(r'P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?)?')
+
+
+def _interval_hours(iso_interval: str) -> tuple[str, int]:
+    """Split an ISO8601 '<start>/<duration>' into (start_iso, n_hours).
+    NWS QPF periods are multiples of an hour, e.g. 'PT6H' -> 6."""
+    start, _, dur = iso_interval.partition('/')
+    m = _DUR.fullmatch(dur) if dur else None
+    if not m:
+        return start, 1
+    days, hours, mins = (int(g) if g else 0 for g in m.groups())
+    return start, max(1, days * 24 + hours + round(mins / 60))
+
+
+def fetch_nws_qpf(lat: float, lon: float) -> list[dict]:
+    """NWS gridpoint quantitative precipitation forecast at a point. Each NWS
+    period reports total mm over a multi-hour window; we spread it evenly to
+    hourly so it overlays the chart's hourly precip bars. Returns
+    [{t, precip_mm}, ...] hourly in mm."""
+    pt = _get(f'{NWS}/points/{lat:.4f},{lon:.4f}')
+    grid_url = (pt or {}).get('properties', {}).get('forecastGridData')
+    if not grid_url:
+        return []
+    grid = _get(grid_url)
+    qpf = (grid or {}).get('properties', {}).get('quantitativePrecipitation', {})
+    out = []
+    for v in qpf.get('values', []):
+        try:
+            total = float(v['value'])
+        except (KeyError, ValueError, TypeError):
+            continue
+        start, n = _interval_hours(v.get('validTime', ''))
+        if not start:
+            continue
+        t0 = pd.Timestamp(start)
+        per_hour = round(total / n, 3)
+        for h in range(n):
+            t = (t0 + pd.Timedelta(hours=h)).strftime('%Y-%m-%dT%H:%M:%SZ')
+            out.append({'t': t, 'precip_mm': per_hour})
+    return out
+
+
+# --------------------------------------------------------------------------
+# MRMS observed precipitation (radar QPE) via IEM IEMRE — daily, mm
+# --------------------------------------------------------------------------
+
+def fetch_mrms_precip(lat: float, lon: float,
+                      start_date: str, end_date: str) -> list[dict]:
+    """Observed MRMS radar precipitation (QPE) at a point, daily totals in mm,
+    from the IEM IEMRE point service. Dates are 'YYYY-MM-DD'. Returns
+    [{date, precip_mm}, ...]."""
+    d = _get(f'{IEM}/iemre/multiday/{start_date}/{end_date}/{lat:.4f}/{lon:.4f}/json')
+    if not d:
+        return []
+    out = []
+    for row in d.get('data', []):
+        mrms_in = row.get('mrms_precip_in')
+        if mrms_in is None:
+            continue
+        try:
+            out.append({'date': row['date'], 'precip_mm': round(float(mrms_in) * IN_TO_MM, 2)})
         except (KeyError, ValueError, TypeError):
             continue
     return out
 
 
-def enrich_site(usgs_id: str) -> tuple[dict | None, list[dict]]:
-    """Convenience: fetch_gauge + fetch_nwm_short_range in one call.
-    Returns (gauge_record, nwm_series). Either may be empty."""
-    g = fetch_gauge(usgs_id)
-    if not g:
-        return None, []
-    nwm = fetch_nwm_short_range(g.get('reach_id'))
-    return g, nwm
+# --------------------------------------------------------------------------
+
+def enrich_site(usgs_id: str, lat: float | None = None, lon: float | None = None,
+                mrms_start: str | None = None, mrms_end: str | None = None) -> dict:
+    """Gather every NOAA/NWS overlay for one gauge in one shot. Returns a dict
+    with whatever could be fetched (any field may be empty/None):
+
+      gauge          NWS official thresholds + observed/forecast stage
+      nwm_short      NWM short-range streamflow (m³/s)
+      nwm_medium     NWM medium-range blend streamflow (m³/s)
+      nwm_analysis   NWM analysis-assimilation "observed" streamflow (m³/s)
+      qpf            NWS forecast rainfall, hourly mm
+      mrms_precip    MRMS observed rainfall, daily mm (needs lat/lon + dates)
+    """
+    gauge = fetch_gauge(usgs_id)
+    reach_id = gauge.get('reach_id') if gauge else None
+    if lat is None and gauge is not None:
+        lat = gauge.get('latitude')
+    if lon is None and gauge is not None:
+        lon = gauge.get('longitude')
+
+    nwm = fetch_nwm_streamflow(reach_id)
+    out = {
+        'gauge': gauge,
+        'nwm_short': nwm['short'],
+        'nwm_medium': nwm['medium'],
+        'nwm_analysis': nwm['analysis'],
+        'qpf': [],
+        'mrms_precip': [],
+    }
+    if lat is not None and lon is not None:
+        out['qpf'] = fetch_nws_qpf(lat, lon)
+        if mrms_start and mrms_end:
+            out['mrms_precip'] = fetch_mrms_precip(lat, lon, mrms_start, mrms_end)
+    return out

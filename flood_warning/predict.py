@@ -253,21 +253,39 @@ def run_all():
                 print(f'  {site["id"]} {site["short"]:<16}  +1h={f1["p"]:6.2f}  '
                       f'+12h={f12["p"]:6.2f} m³/s  (issued {p["issue_time"]})')
 
-    # NOAA National Water Model short-range overlay — runs once per gauge,
-    # returns 18 hourly forecast points in m³/s. Bundled into each
-    # prediction record so the UI can draw it alongside our CNN forecast.
-    print('NOAA NWM short-range overlay:')
+    # NOAA / NWS comparison overlays — fetched once per gauge and bundled into
+    # each prediction record so the UI can draw them alongside the CNN forecast.
+    # These are NOT fed back into the model; they are reference series:
+    #   noaa_nwm           NWM short-range streamflow  (next ~18h, m³/s)
+    #   noaa_nwm_medium    NWM medium-range blend      (next ~10d, m³/s)
+    #   noaa_nwm_analysis  NWM analysis "observed"     (recent, m³/s)
+    #   noaa_qpf           NWS forecast rainfall       (hourly, mm)
+    #   noaa_mrms_precip   MRMS observed rainfall      (daily, mm)
+    print('NOAA / NWS overlays:')
     from . import noaa
+    mrms_end = pd.Timestamp.utcnow().normalize() - pd.Timedelta(days=1)
+    mrms_start = mrms_end - pd.Timedelta(days=7)
     for p in preds:
         site = BY_ID[p['id']]
-        gauge, nwm = noaa.enrich_site(p['id'])
-        if nwm:
-            p['noaa_nwm'] = nwm
-            first, last = nwm[0]['flow_m3s'], nwm[-1]['flow_m3s']
-            print(f'  {p["id"]} {site["short"]:<16}  '
-                  f'NWM +1h={first:.2f}  +18h={last:.2f} m³/s ({len(nwm)} pts)')
-        else:
-            print(f'  {p["id"]} {site["short"]:<16}  no NWM reach mapped')
+        n = noaa.enrich_site(
+            p['id'], lat=site['lat'], lon=site['lon'],
+            mrms_start=mrms_start.strftime('%Y-%m-%d'),
+            mrms_end=mrms_end.strftime('%Y-%m-%d'),
+        )
+        if n['nwm_short']:
+            p['noaa_nwm'] = n['nwm_short']
+        if n['nwm_medium']:
+            p['noaa_nwm_medium'] = n['nwm_medium']
+        if n['nwm_analysis']:
+            p['noaa_nwm_analysis'] = n['nwm_analysis']
+        if n['qpf']:
+            p['noaa_qpf'] = n['qpf']
+        if n['mrms_precip']:
+            p['noaa_mrms_precip'] = n['mrms_precip']
+        print(f'  {p["id"]} {site["short"]:<16}  '
+              f'NWM short={len(n["nwm_short"])} medium={len(n["nwm_medium"])} '
+              f'analysis={len(n["nwm_analysis"])} | QPF={len(n["qpf"])}h '
+              f'MRMS={len(n["mrms_precip"])}d')
 
     OUT_PATH.write_text(json.dumps({
         'model_id': 'dmv-cnn-12h',

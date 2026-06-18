@@ -45,7 +45,7 @@ flood_warning/
 ├── model.py            # the CNN
 ├── train.py            # per-gauge training
 ├── predict.py          # live inference + 7-day backtest
-├── noaa.py             # NOAA National Water Model short-range overlay
+├── noaa.py             # NOAA/NWS comparison overlays (NWM, QPF, MRMS)
 ├── checkpoints/        # pretrained .pt files (one per gauge)
 └── requirements-ci.txt
 ```
@@ -76,7 +76,17 @@ done                                              # ~90s per gauge on CPU
 .venv/bin/python -m flood_warning.predict        # writes outputs/dmv-cnn-12h/preds.json
 ```
 
-`preds.json` contains, per gauge: the 12-hour-ahead forecast, a 7-day hourly backtest (how the model has been tracking observed flow lately), and a NOAA National Water Model short-range overlay for comparison.
+`preds.json` contains, per gauge: the 12-hour-ahead CNN forecast, a 7-day hourly backtest (how the model has been tracking observed flow lately), and a set of NOAA/NWS comparison overlays. The overlays are reference series only — they ride alongside the CNN forecast and are never fed back into the model:
+
+| Field | Source | What it is |
+| --- | --- | --- |
+| `noaa_nwm` | NWM short-range | Next ~18h streamflow, hourly (m³/s) |
+| `noaa_nwm_medium` | NWM medium-range blend | Next ~10d streamflow, hourly (m³/s) |
+| `noaa_nwm_analysis` | NWM analysis-assimilation | Recent best-estimate "observed" streamflow (m³/s) |
+| `noaa_qpf` | NWS gridpoint forecast | Forecast rainfall, hourly (mm) |
+| `noaa_mrms_precip` | MRMS radar QPE (via IEM) | Observed rainfall, daily (mm) |
+
+NWM streamflow and NWS QPF come from unauthenticated NOAA APIs ([NWPS](https://api.water.noaa.gov/nwps/v1/docs/), [api.weather.gov](https://www.weather.gov/documentation/services-web-api)); MRMS observed precip is pulled per-point from the [Iowa Environmental Mesonet](https://mesonet.agron.iastate.edu/) IEMRE service.
 
 ## Adding a gauge
 
