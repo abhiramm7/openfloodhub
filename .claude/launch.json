@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8772"],
+      "cwd": "web",
+      "port": 8772
+    }
+  ]
+}

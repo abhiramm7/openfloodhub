@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenFloodHub — Washington, DC</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root {
+    --normal:  #2e9e5b;
+    --warning: #f5a623;
+    --danger:  #e8453c;
+    --extreme: #8b1a13;
+    --nodata:  #9aa0a6;
+    --flow:    #1a73e8;
+    --ink:     #202124;
+    --muted:   #5f6368;
+    --line:    #e3e6ea;
+    --panel-w: 384px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: "Google Sans", Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--ink); }
+  #map { position: absolute; inset: 56px 0 0 0; z-index: 1; }
+
+  /* Top bar */
+  #topbar {
+    position: absolute; top: 0; left: 0; right: 0; height: 56px; z-index: 1000;
+    display: flex; align-items: center; gap: 14px; padding: 0 20px;
+    background: #fff; border-bottom: 1px solid var(--line);
+  }
+  #topbar .logo { display: flex; align-items: center; gap: 9px; font-size: 20px; font-weight: 500; }
+  #topbar .logo .drop { font-size: 22px; }
+  #topbar .tag { color: var(--muted); font-size: 13px; padding-left: 14px; border-left: 1px solid var(--line); }
+  #topbar .spacer { flex: 1; }
+  #topbar .updated { color: var(--muted); font-size: 12px; }
+
+  /* Detail panel */
+  #panel {
+    position: absolute; top: 56px; left: 0; bottom: 0; width: var(--panel-w); z-index: 1000;
+    background: #fff; border-right: 1px solid var(--line); overflow-y: auto;
+    transform: translateX(-100%); transition: transform .22s ease; padding: 20px;
+  }
+  #panel.open { transform: translateX(0); box-shadow: 2px 0 14px rgba(0,0,0,.08); }
+  #panel h2 { font-size: 18px; font-weight: 500; margin: 0 0 2px; display: flex; align-items: center; gap: 8px; }
+  #panel .sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  #panel .close { position: absolute; top: 16px; right: 16px; cursor: pointer; color: var(--muted); font-size: 22px; line-height: 1; border: none; background: none; }
+  .axis-label { font-size: 11px; fill: var(--muted); }
+  .thr-label  { font-size: 10px; font-weight: 600; }
+
+  .legend-row { display: flex; justify-content: space-between; gap: 8px; margin-top: 14px; }
+  .legend-row .item { flex: 1; text-align: center; }
+  .legend-row .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+  .legend-row .lbl { font-size: 11px; color: var(--muted); }
+  .legend-row .val { font-size: 13px; font-weight: 600; margin-top: 2px; }
+
+  .section-title { font-size: 13px; font-weight: 600; margin: 22px 0 10px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+  .info-grid .k { font-size: 11px; color: var(--muted); }
+  .info-grid .v { font-size: 13px; font-weight: 500; margin-top: 1px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--normal); margin-bottom: 14px; }
+  .badge::before { content: "✓"; font-weight: 700; }
+
+  .status-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #fff; }
+
+  /* Map legend card */
+  #riskcard {
+    position: absolute; left: 16px; bottom: 22px; z-index: 1000; background: #fff;
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; box-shadow: 0 2px 10px rgba(0,0,0,.08);
+    font-size: 12px; min-width: 168px;
+  }
+  #riskcard .title { font-weight: 600; margin-bottom: 8px; font-size: 12px; }
+  #riskcard .row { display: flex; align-items: center; gap: 8px; margin: 5px 0; color: var(--muted); }
+  #riskcard .row .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .leaflet-container { background: #eef1f4; }
+  .chart-note { font-size: 11px; color: var(--muted); margin-top: 8px; }
+</style>
+</head>
+<body>
+  <div id="topbar">
+    <div class="logo"><span class="drop">💧</span> OpenFloodHub</div>
+    <div class="tag">Local per-site flood models · Washington, DC</div>
+    <div class="spacer"></div>
+    <div class="updated" id="updated"></div>
+  </div>
+
+  <div id="map"></div>
+
+  <div id="panel">
+    <button class="close" id="panelClose" aria-label="Close">×</button>
+    <div id="panelBody"></div>
+  </div>
+
+  <div id="riskcard">
+    <div class="title">Forecast risk (12h)</div>
+    <div class="row"><span class="dot" style="background:var(--normal)"></span> Normal</div>
+    <div class="row"><span class="dot" style="background:var(--warning)"></span> Warning</div>
+    <div class="row"><span class="dot" style="background:var(--danger)"></span> Danger</div>
+    <div class="row"><span class="dot" style="background:var(--extreme)"></span> Extreme</div>
+    <div class="row"><span class="dot" style="background:var(--nodata)"></span> No threshold</div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="app.js"></script>
+</body>
+</html>

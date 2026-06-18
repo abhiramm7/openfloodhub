@@ -234,6 +234,10 @@ def backtest_gauge(gauge_id: str, model, scaler, cfg, days_back: int = 30,
 
 def run_all():
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    from . import thresholds
+    thresh = thresholds.load()
+    if not thresh:
+        print('  (no thresholds.json — run `python -m flood_warning.thresholds`)')
     preds = []
     print('Live CNN inference:')
     for site in SITES:
@@ -246,6 +250,16 @@ def run_all():
             print(f'  ! {site["id"]}: {e}')
             continue
         if p:
+            # Site metadata so the UI can place + label markers without a
+            # second file.
+            p['name'] = site['name']
+            p['short'] = site['short']
+            p['lat'] = site['lat']
+            p['lon'] = site['lon']
+            p['drainage_sqmi'] = site['drainage_sqmi']
+            p['kind'] = site['kind']
+            if site['id'] in thresh:
+                p['thresholds'] = thresh[site['id']]
             preds.append(p)
             forecasts = [e for e in p['series'] if 'p' in e]
             if forecasts:

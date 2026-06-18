@@ -1,0 +1,51 @@
+{
+  "01646500": {
+    "warning": 926.714,
+    "danger": 1776.936,
+    "extreme": 4165.82,
+    "max_observed": 4417.421,
+    "record_years": 3
+  },
+  "01648000": {
+    "warning": 15.038,
+    "danger": 43.342,
+    "extreme": 59.037,
+    "max_observed": 59.961,
+    "record_years": 2
+  },
+  "01651760": {
+    "warning": 54.044,
+    "danger": 113.324,
+    "extreme": 284.233,
+    "max_observed": 304.642,
+    "record_years": 1
+  },
+  "01649500": {
+    "warning": 18.876,
+    "danger": 62.195,
+    "extreme": 153.9,
+    "max_observed": 171.42,
+    "record_years": 3
+  },
+  "01650500": {
+    "warning": 5.502,
+    "danger": 22.288,
+    "extreme": 51.012,
+    "max_observed": 56.988,
+    "record_years": 3
+  },
+  "01651800": {
+    "warning": 2.425,
+    "danger": 6.705,
+    "extreme": 14.797,
+    "max_observed": 15.582,
+    "record_years": 2
+  },
+  "01646000": {
+    "warning": 15.268,
+    "danger": 44.129,
+    "extreme": 75.265,
+    "max_observed": 86.225,
+    "record_years": 3
+  }
+}
