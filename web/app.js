@@ -155,13 +155,27 @@ function chartSVG(p) {
   const tMin = Math.min(...all.map(d => d.t));
   const tMax = Math.max(...all.map(d => d.t));
   const th = p.thresholds;
-  const dataMax = Math.max(...all.map(d => d.v));
-  // Include threshold bands in the y-range so the gauge's distance-to-flood
-  // reads the way Flood Hub shows it (bands above, calm flow low).
-  const top = (th ? Math.max(th.extreme, dataMax) : dataMax) * 1.08 || 1;
+
+  // Fit the y-axis to the data so the observed→forecast line is actually
+  // legible. Thresholds within reach are drawn as reference lines; thresholds
+  // far above the current flow (calm baseflow) become compact chips instead of
+  // crushing the series flat against the axis.
+  const vals = all.map(d => d.v);
+  let dataMax = Math.max(...vals), dataMin = Math.min(...vals);
+  if (!isFinite(dataMax)) { dataMax = 1; dataMin = 0; }
+  const span = (dataMax - dataMin) || dataMax || 1;
+  let top = dataMax + span * 0.25;
+  const bot = Math.max(0, dataMin - span * 0.25);
+  const NEAR = dataMax + span * 1.5;   // threshold "within reach" cutoff
+  const thrLines = [], thrChips = [];
+  if (th) for (const [name, color] of [['warning', RISK.warning], ['danger', RISK.danger], ['extreme', RISK.extreme]]) {
+    const v = th[name]; if (v == null) continue;
+    if (v <= NEAR) { thrLines.push([name, color, v]); top = Math.max(top, v + span * 0.18); }
+    else thrChips.push([name, color, v]);
+  }
 
   const x = t => M.l + ((t - tMin) / (tMax - tMin || 1)) * pw;
-  const y = v => M.t + ph - (v / top) * ph;
+  const y = v => M.t + ph - ((v - bot) / (top - bot || 1)) * ph;
   const nowX = obs.length ? x(obs[obs.length - 1].t) : x(tMin);
 
   const line = pts => pts.map((d, i) => (i ? 'L' : 'M') + x(d.t).toFixed(1) + ' ' + y(d.v).toFixed(1)).join(' ');
@@ -171,20 +185,21 @@ function chartSVG(p) {
 
   // y gridlines + labels
   for (let i = 0; i <= 4; i++) {
-    const v = (top / 4) * i, yy = y(v);
+    const v = bot + ((top - bot) / 4) * i, yy = y(v);
     svg += `<line x1="${M.l}" y1="${yy}" x2="${W - M.r}" y2="${yy}" stroke="var(--line)" stroke-width="1"/>`;
     svg += `<text class="axis-label" x="${M.l - 6}" y="${yy + 3}" text-anchor="end">${fmtAxis(v)}</text>`;
   }
 
-  // threshold lines
-  if (th) {
-    for (const [name, color] of [['warning', RISK.warning], ['danger', RISK.danger], ['extreme', RISK.extreme]]) {
-      const v = th[name]; if (v == null || v > top) continue;
-      const yy = y(v);
-      svg += `<line x1="${M.l}" y1="${yy}" x2="${W - M.r}" y2="${yy}" stroke="${color}" stroke-width="1.4"/>`;
-      svg += `<text class="thr-label" x="${W - M.r}" y="${yy - 3}" text-anchor="end" fill="${color}">${name[0].toUpperCase() + name.slice(1)}</text>`;
-    }
+  // threshold reference lines (those within reach of the current flow)
+  for (const [name, color, v] of thrLines) {
+    const yy = y(v);
+    svg += `<line x1="${M.l}" y1="${yy}" x2="${W - M.r}" y2="${yy}" stroke="${color}" stroke-width="1.4" stroke-dasharray="5 3"/>`;
+    svg += `<text class="thr-label" x="${W - M.r}" y="${yy - 3}" text-anchor="end" fill="${color}">${cap(name)} ${fmtAxis(v)}</text>`;
   }
+  // off-scale thresholds (gauge well below flood stage) — compact chips
+  thrChips.forEach(([name, color, v], i) => {
+    svg += `<text class="thr-label" x="${M.l + 3}" y="${M.t + 9 + i * 13}" text-anchor="start" fill="${color}">▲ ${cap(name)} ${fmtAxis(v)}</text>`;
+  });
 
   // NWM overlay (dotted)
   if (nwm.length > 1) svg += `<path d="${line(nwm)}" fill="none" stroke="#7b61ff" stroke-width="1.5" stroke-dasharray="1.5 2.5" opacity="0.9"/>`;
@@ -207,6 +222,7 @@ function chartSVG(p) {
 
 /* ---- formatting --------------------------------------------------------- */
 
+function cap(s) { return s[0].toUpperCase() + s.slice(1); }
 function fmt(v) { return v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(2); }
 function fmtAxis(v) { return v >= 1000 ? (v / 1000).toFixed(1) + 'k' : Math.round(v); }
 function fmtTick(t) { return new Date(t).toLocaleString([], { month: 'numeric', day: 'numeric', hour: 'numeric' }); }
