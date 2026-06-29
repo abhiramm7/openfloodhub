@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OpenFloodHub — Washington, DC</title>
+<title>OpenFloodHub, Washington DC</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <style>
@@ -30,7 +30,6 @@
     background: #fff; border-bottom: 1px solid var(--line);
   }
   #topbar .logo { display: flex; align-items: center; gap: 9px; font-size: 20px; font-weight: 500; }
-  #topbar .logo .drop { font-size: 22px; }
   #topbar .tag { color: var(--muted); font-size: 13px; padding-left: 14px; border-left: 1px solid var(--line); }
   #topbar .spacer { flex: 1; }
   #topbar .updated { color: var(--muted); font-size: 12px; }
@@ -58,8 +57,6 @@
   .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
   .info-grid .k { font-size: 11px; color: var(--muted); }
   .info-grid .v { font-size: 13px; font-weight: 500; margin-top: 1px; }
-  .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--normal); margin-bottom: 14px; }
-  .badge::before { content: "✓"; font-weight: 700; }
 
   .status-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #fff; }
 
@@ -78,7 +75,7 @@
 </head>
 <body>
   <div id="topbar">
-    <div class="logo"><span class="drop">💧</span> OpenFloodHub</div>
+    <div class="logo">OpenFloodHub</div>
     <div class="spacer"></div>
     <div class="updated" id="updated"></div>
   </div>
@@ -101,6 +98,6 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>

@@ -34,7 +34,7 @@ async function main() {
     const m = L.circleMarker([p.lat, p.lon], markerStyle(r, false))
       .addTo(map)
       .on('click', () => select(p));
-    m.bindTooltip(`${p.name} — ${r.label}`, { direction: 'top', offset: [0, -6] });
+    m.bindTooltip(`${p.name}: ${r.label}`, { direction: 'top', offset: [0, -6] });
     MARKERS[p.id] = { marker: m, risk: r };
   }
 
@@ -101,21 +101,21 @@ function renderPanel(p) {
   const body = document.getElementById('panelBody');
   body.innerHTML = `
     <h2>${p.name}</h2>
-    <div class="sub">${p.short} · USGS ${p.id}
+    <div class="sub">${p.short}, USGS ${p.id}
       <span class="status-pill" style="background:${r.color};margin-left:6px">${r.label}</span></div>
 
-    <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Discharge (m³/s) — observed &amp; 12-hour forecast</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Discharge (m³/s)</div>
     ${chartSVG(p)}
-    <div class="chart-note">Solid = USGS observed · dashed = local CNN forecast · dotted = NOAA NWM</div>
+    <div class="chart-note">Solid line is observed flow, dashed is the CNN forecast, dotted is NOAA's NWM.</div>
 
     ${th ? `
     <div class="legend-row">
       <div class="item"><span class="dot" style="background:var(--warning)"></span><span class="lbl">Warning</span><div class="val">${fmt(th.warning)}</div></div>
       <div class="item"><span class="dot" style="background:var(--danger)"></span><span class="lbl">Danger</span><div class="val">${fmt(th.danger)}</div></div>
       <div class="item"><span class="dot" style="background:var(--extreme)"></span><span class="lbl">Extreme</span><div class="val">${fmt(th.extreme)}</div></div>
-    </div>` : `<div class="chart-note">No return-period thresholds for this gauge.</div>`}
+    </div>` : `<div class="chart-note">No flood thresholds for this gauge.</div>`}
 
-    <div class="section-title">Now &amp; forecast</div>
+    <div class="section-title">Now and forecast</div>
     <div class="info-grid">
       <div><div class="k">Current flow</div><div class="v">${cur != null ? fmt(cur) + ' m³/s' : '—'}</div></div>
       <div><div class="k">12h forecast peak</div><div class="v">${peak != null ? fmt(peak) + ' m³/s' : '—'}</div></div>
@@ -123,8 +123,7 @@ function renderPanel(p) {
       <div><div class="k">Forecast horizon</div><div class="v">12 hours</div></div>
     </div>
 
-    <div class="section-title">Gauge &amp; model</div>
-    <span class="badge">Local per-site model</span>
+    <div class="section-title">Gauge and model</div>
     <div class="info-grid">
       <div><div class="k">Model</div><div class="v">1D CNN (per gauge)</div></div>
       <div><div class="k">Skill (overall NSE)</div><div class="v">${nse != null ? nse.toFixed(3) : '—'}</div></div>
