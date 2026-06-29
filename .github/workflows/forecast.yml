@@ -1,0 +1,62 @@
+name: Update forecasts
+
+# Re-run inference on a schedule, commit the refreshed predictions, and
+# redeploy the map. Pushes made with GITHUB_TOKEN do not trigger the separate
+# pages.yml workflow, so this job deploys to Pages itself.
+
+on:
+  schedule:
+    - cron: '15 */2 * * *'   # every 2 hours, at :15
+  workflow_dispatch:
+
+permissions:
+  contents: write   # commit the refreshed preds.json
+  pages: write      # deploy the map
+  id-token: write
+
+concurrency:
+  group: forecast
+  cancel-in-progress: false
+
+jobs:
+  forecast:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Run inference
+        env:
+          # Optional. USGS NWIS works without a key; add the repo secret to use one.
+          USGS_API_KEY: ${{ secrets.USGS_API_KEY }}
+        run: |
+          python -m flood_warning.predict
+          cp outputs/dmv-cnn-12h/preds.json web/preds.json
+
+      - name: Commit refreshed predictions
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          if git diff --quiet -- web/preds.json; then
+            echo 'preds.json unchanged, nothing to commit'
+          else
+            git add web/preds.json
+            git commit -m "data: refresh forecasts ($(date -u +%Y-%m-%dT%H:%MZ))"
+            git push
+          fi
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deploy
+        uses: actions/deploy-pages@v4
