@@ -1,10 +1,34 @@
 # OpenFloodHub
 
-An open-source, self-hostable flood-forecasting model — a free alternative to Google Flood Hub.
+An open-source, self-hostable alternative to [Google Flood Hub](https://sites.research.google/floods/).
 
-A tiny 1D CNN, trained per gauge on three years of hourly USGS streamflow paired with Open-Meteo ERA5 forcings, produces a 12-hour-ahead flow forecast. It runs on CPU, trains in ~90 seconds per gauge, and ships with pretrained checkpoints for ten gauges around Washington, DC. Everything here is just the model: fetch data, train, and run inference. No backend, no API keys beyond a free USGS key, no cloud dependency.
+Google Flood Hub runs one global model: a single neural network, trained across thousands of basins, that predicts streamflow everywhere from one set of weights. OpenFloodHub does the opposite. It trains a separate small model for each river gauge, on that gauge's own history.
 
-> **Caveat.** This is a research/prototype model. Do not use it to decide whether to drive through floodwater. The official sources for that are [NWS AHPS](https://water.weather.gov/ahps/) and [NOAA NWPS](https://water.noaa.gov/).
+That tradeoff is the whole point of the project:
+
+- A model that only has to learn one catchment can be tiny (about 50k parameters), train in 90 seconds on a laptop CPU, and you can actually inspect what it learned for that specific river.
+- A global model generalizes to places with no gauge at all, which a per-site model cannot do. You need a few years of record for each gauge before you can train it.
+
+So this is not a drop-in replacement for everything Flood Hub does. It is a different bet: that for a known set of gauges you care about, a specialized local model is simpler to run, cheaper to retrain, and easier to reason about than one big model trying to cover the planet.
+
+The repo ships with a working deployment for the gauges around Washington, DC.
+
+> **Caveat.** This is a research prototype. Do not use it to decide whether to drive through floodwater. The official sources for that are [NWS AHPS](https://water.weather.gov/ahps/) and [NOAA NWPS](https://water.noaa.gov/).
+
+## The map
+
+`web/` is a static map UI, styled after Flood Hub but driven by the per-site models. No build step, no backend: one HTML file, one JS file, Leaflet, and the `preds.json` the model writes.
+
+![OpenFloodHub DC map](docs/screenshot.png)
+
+Click a gauge to open its panel. The chart shows recent observed discharge (solid line), the local CNN's 12-hour forecast (dashed), and NOAA's National Water Model for comparison (dotted). Each gauge has its own Warning/Danger/Extreme thresholds, derived from that gauge's flood history, so the risk coloring means something different for the Potomac than it does for a 4-square-mile urban creek.
+
+To run it locally after generating `preds.json` (see below):
+
+```bash
+cp outputs/dmv-cnn-12h/preds.json web/preds.json
+cd web && python3 -m http.server 8772      # open http://localhost:8772
+```
 
 ## The model
 
@@ -35,6 +59,10 @@ Held-out test NSE (3 years hourly, last 15% as test):
 
 The big mainstem gauges are basically solved at hourly resolution. The small urban catchments at the bottom of the table are hard and there's no real way around it: Watts Branch is 3.6 mi² of pavement, it responds to rain in minutes, and an hourly model is the wrong tool. Either bump to 15-minute cadence or feed it NEXRAD precip instead of point ERA5.
 
+## Thresholds
+
+NWS publishes flood categories mostly as gauge height (stage in feet), which a discharge model can't speak to. So `thresholds.py` derives flow thresholds (m³/s) from each gauge's own record: it takes the daily-peak distribution over the multi-year history and reads off high quantiles as return-period stand-ins (roughly 2-, 5-, and 10-year for Warning, Danger, Extreme). These are cached to `thresholds.json` and attached to every prediction.
+
 ## Layout
 
 ```
@@ -45,9 +73,12 @@ flood_warning/
 ├── model.py            # the CNN
 ├── train.py            # per-gauge training
 ├── predict.py          # live inference + 7-day backtest
+├── thresholds.py       # per-gauge flood thresholds from the record
 ├── noaa.py             # NOAA/NWS comparison overlays (NWM, QPF, MRMS)
 ├── checkpoints/        # pretrained .pt files (one per gauge)
 └── requirements-ci.txt
+
+web/                    # static map UI (index.html, app.js, preds.json)
 ```
 
 ## Setup
@@ -68,6 +99,7 @@ Cached data goes to `./data/` by default; override with `$FLOOD_DATA_DIR`. Infer
 for gid in 01646500 01648000 01651760 01649500 01650500 01651800 01646000; do
   .venv/bin/python -m flood_warning.train "$gid"
 done                                              # ~90s per gauge on CPU
+.venv/bin/python -m flood_warning.thresholds      # compute flood thresholds
 ```
 
 ## Run inference
@@ -76,7 +108,7 @@ done                                              # ~90s per gauge on CPU
 .venv/bin/python -m flood_warning.predict        # writes outputs/dmv-cnn-12h/preds.json
 ```
 
-`preds.json` contains, per gauge: the 12-hour-ahead CNN forecast, a 7-day hourly backtest (how the model has been tracking observed flow lately), and a set of NOAA/NWS comparison overlays. The overlays are reference series only — they ride alongside the CNN forecast and are never fed back into the model:
+`preds.json` contains, per gauge: the 12-hour-ahead CNN forecast, a 7-day hourly backtest (how the model has been tracking observed flow lately), the gauge's flood thresholds, and a set of NOAA/NWS comparison overlays. The overlays are reference series only. They ride alongside the CNN forecast and are never fed back into the model:
 
 | Field | Source | What it is |
 | --- | --- | --- |
@@ -90,7 +122,7 @@ NWM streamflow and NWS QPF come from unauthenticated NOAA APIs ([NWPS](https://a
 
 ## Adding a gauge
 
-Add a row to `flood_warning/sites.py` with `id`, `name`, `lat`, `lon`, `drainage_sqmi`, `kind`. Then fetch and train it.
+Add a row to `flood_warning/sites.py` with `id`, `name`, `lat`, `lon`, `drainage_sqmi`, `kind`. Then fetch, train, and compute its thresholds.
 
 ## License
 
