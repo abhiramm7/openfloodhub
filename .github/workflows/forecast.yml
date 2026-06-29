@@ -21,6 +21,7 @@ concurrency:
 jobs:
   forecast:
     runs-on: ubuntu-latest
+    timeout-minutes: 20   # fail fast if a data endpoint hangs (normal run ~7 min)
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
