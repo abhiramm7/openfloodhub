@@ -32,10 +32,10 @@ cd web && python3 -m http.server 8772      # open http://localhost:8772
 
 ## The model
 
-`flood_warning/model.py`. Two-branch 1D CNN: a 3-channel past stream (flow, precip, temperature for the last 24 hours) and a 1-channel future stream (forecast precip for the next 12 hours). Each goes through a few Conv1D layers, gets flattened, concatenated, and projected to a 12-step output.
+`flood_warning/model.py`. Two-branch 1D CNN: a 4-channel past stream (flow, precip, temperature, and soil moisture for the last 24 hours) and a 1-channel future stream (forecast precip for the next 12 hours). Each goes through a few Conv1D layers, gets flattened, concatenated, and projected to a 12-step output. The 4th past channel is ERA5-Land surface soil moisture — an antecedent-wetness proxy that tells the model how saturated the basin is before a storm.
 
 ```
-past   (3 ch x 24h)  ->  Conv1D x 3  ->  flatten
+past   (4 ch x 24h)  ->  Conv1D x 3  ->  flatten
 future (1 ch x 12h)  ->  Conv1D x 2  ->  flatten
                          concat -> FC -> 12-step forecast
 ```
@@ -47,10 +47,7 @@ Held-out test NSE (3 years hourly, last 15% as test):
 | Gauge | Drainage (mi²) | Test NSE | 12h-ahead NSE |
 | --- | ---: | ---: | ---: |
 | Potomac at Little Falls (DC) | 11,560 | 0.977 | 0.945 |
-| Potomac at Point of Rocks (MD) | 9,651 | 0.965 | 0.921 |
-| Goose Creek nr Leesburg (VA) | 332 | 0.700 | 0.601 |
 | Anacostia at Kenilworth (DC) | 134 | 0.694 | 0.653 |
-| Catoctin Creek (MD) | 67 | 0.648 | 0.547 |
 | NE Branch Anacostia (MD) | 73 | 0.436 | 0.175 |
 | Rock Creek at Sherrill Dr (DC) | 62 | 0.414 | 0.144 |
 | Difficult Run (VA) | 58 | 0.352 | 0.115 |
@@ -74,6 +71,7 @@ flood_warning/
 ├── train.py            # per-gauge training
 ├── predict.py          # live inference + 7-day backtest
 ├── thresholds.py       # per-gauge flood thresholds from the record
+├── thresholds.json     # cached thresholds (committed)
 ├── noaa.py             # NOAA/NWS comparison overlays (NWM, QPF, MRMS)
 ├── checkpoints/        # pretrained .pt files (one per gauge)
 └── requirements-ci.txt
