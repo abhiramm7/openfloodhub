@@ -1,5 +1,6 @@
-"""Record the demo GIF for the README: open the map, click the Potomac
-gauge, open the model-performance comparison.
+"""Record the demo GIF for the README: open the map, zoom out to the full
+Potomac catchment, click the Potomac gauge, open the model-performance
+comparison.
 
 Re-run whenever the UI changes:
 
@@ -25,8 +26,9 @@ from playwright.sync_api import sync_playwright
 
 REPO = Path(__file__).resolve().parents[1]
 OUT = REPO / 'assets' / 'demo.gif'
-VIEWPORT = {'width': 1280, 'height': 800}
-GIF_WIDTH = 960
+VIEWPORT = {'width': 1440, 'height': 900}
+DEVICE_SCALE = 2        # hi-res capture
+GIF_WIDTH = 1440
 FRAME_MS = 100          # base frame duration
 
 POTOMAC = (38.9498, -77.1276)
@@ -35,7 +37,7 @@ CURSOR_JS = """
 () => {
   const c = document.createElement('div');
   c.id = 'fakecursor';
-  c.style.cssText = `position:fixed;width:14px;height:14px;border-radius:50%;
+  c.style.cssText = `position:fixed;width:16px;height:16px;border-radius:50%;
     border:2.5px solid #000;background:rgba(255,255,255,.75);z-index:99999;
     pointer-events:none;transform:translate(-50%,-50%);left:640px;top:400px;
     box-shadow:0 1px 4px rgba(0,0,0,.4)`;
@@ -67,7 +69,8 @@ def main():
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
-        page = browser.new_page(viewport=VIEWPORT)
+        page = browser.new_page(viewport=VIEWPORT,
+                                device_scale_factor=DEVICE_SCALE)
 
         def cursor_to(x, y):
             page.evaluate(
@@ -115,7 +118,17 @@ def main():
         cursor_to(cx, cy)
         shot(1200)
 
-        # 2. Click the Potomac gauge.
+        # 2. Zoom out until the Potomac's entire HYBAS catchment fits, so the
+        #    basin outline lands fully in frame when the gauge is selected.
+        page.evaluate(
+            "() => { const b = L.geoJSON(BASINS['01646500'].geometry).getBounds();"
+            " map.flyToBounds(b.pad(0.06), {duration: 1.4}); }")
+        for _ in range(12):     # frames during the flight
+            shot()
+        page.wait_for_timeout(1500)   # let tiles at the new zoom land
+        shot(1000)
+
+        # 3. Click the Potomac gauge.
         pt = page.evaluate(
             "([lat, lon]) => { const p = map.latLngToContainerPoint([lat, lon]);"
             " const r = document.getElementById('map').getBoundingClientRect();"
