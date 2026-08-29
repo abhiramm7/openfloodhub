@@ -72,7 +72,7 @@ def fetch_usgs_hourly(gauge_id: str, start: str, end: str) -> pd.Series:
             for v in ts.get('values', [{}])[0].get('value', []):
                 try:
                     cfs = float(v['value'])
-                    if cfs < 0:
+                    if cfs <= -999998:      # NWIS missing-data sentinel
                         continue
                     chunks.append((v['dateTime'], cfs * CFS_TO_M3S))
                 except (ValueError, KeyError, TypeError):
@@ -81,12 +81,19 @@ def fetch_usgs_hourly(gauge_id: str, start: str, end: str) -> pd.Series:
         time.sleep(0.1)
 
     if not chunks:
-        return pd.Series(dtype=float, name='flow_m3s')
+        # Empty but with a DatetimeIndex — callers resample/reindex this, and
+        # the RangeIndex default blows up in resample('D') with a TypeError
+        # that masks the real diagnosis (dead feed).
+        return pd.Series(dtype=float, name='flow_m3s', index=pd.DatetimeIndex([]))
     df = pd.DataFrame(chunks, columns=['t', 'flow_m3s'])
     df['t'] = pd.to_datetime(df['t'], utc=True).dt.tz_convert(None)
     df = df.set_index('t').sort_index()
-    # Resample 15-min cadence to hourly mean
-    hourly = df['flow_m3s'].resample('h').mean()
+    # Resample 15-min cadence to hourly mean. Kenilworth (01651760) is tidal —
+    # discharge genuinely goes negative on flood tide, and dropping those
+    # readings punched 5-6h holes into the record every tide cycle. Keep them
+    # in the mean and floor the hour at 0: net upstream flow is not a flood
+    # signal, and the model's flow encoding clips at 0 anyway.
+    hourly = df['flow_m3s'].resample('h').mean().clip(lower=0)
     hourly.name = 'flow_m3s'
     return hourly
 
@@ -137,10 +144,11 @@ def fetch_site(site: dict, years_back: int = 3) -> pd.DataFrame:
             'soil_moisture_7_to_28cm': 'sm_subsurface',
         })], axis=1, join='outer')
     df = df.loc[(df.index >= start) & (df.index < end)].sort_index()
-    # Forward-fill small gaps in flow (USGS sometimes missing 1-2 hours).
-    # Soil moisture from ERA5 lags ~5 days; forward-fill across the gap so
-    # the recent window has a usable value.
-    df['flow_m3s'] = df['flow_m3s'].interpolate(limit=4)
+    # Bridge small interior gaps in flow (USGS sometimes missing 1-2 hours);
+    # limit_area='inside' keeps interpolate from padding the trailing edge
+    # with the last value. Soil moisture from ERA5 lags ~5 days; forward-fill
+    # across the gap so the recent window has a usable value.
+    df['flow_m3s'] = df['flow_m3s'].interpolate(limit=4, limit_area='inside')
     df['sm_surface'] = df['sm_surface'].ffill(limit=24 * 7)
     df['sm_subsurface'] = df['sm_subsurface'].ffill(limit=24 * 7)
 
@@ -213,7 +221,11 @@ def fetch_hourly_live(gauge_id: str, days_back: int = 8) -> pd.DataFrame:
         }),
         sm,
     ], axis=1, join='outer').sort_index()
-    df['flow_m3s'] = df['flow_m3s'].interpolate(limit=4)
+    # limit_area='inside' is load-bearing here: the index extends 2 days into
+    # the future (forecast weather), and a plain interpolate would hold the
+    # last USGS reading forward into it — fabricated "observed" hours that
+    # push issue_time past the last real observation.
+    df['flow_m3s'] = df['flow_m3s'].interpolate(limit=4, limit_area='inside')
     df['sm_surface'] = df['sm_surface'].ffill(limit=24 * 7)
     df['sm_subsurface'] = df['sm_subsurface'].ffill(limit=24 * 7)
     return df

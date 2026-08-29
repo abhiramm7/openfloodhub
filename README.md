@@ -131,15 +131,15 @@ Selecting a gauge outlines its contributing area from `web/basins.json` (about 1
 
 ## Adding a gauge
 
-Add a row to `flood_warning/sites.py` with `id`, `name`, `lat`, `lon`, `drainage_sqmi`, `kind`. Then fetch, train, and compute its thresholds.
+Add a row to `flood_warning/sites.py` with `id`, `name`, `short` (the abbreviated label used on the map and in logs), `lat`, `lon`, `drainage_sqmi`, and `kind`. All seven fields are required — `predict` builds the map data from them. Then fetch, train, and compute its thresholds.
 
 ## How to use this
 
 The hosted map is at <https://abhiramm7.github.io/openfloodhub/> and refreshes every two hours.
 
-1. Marker color is the 12-hour outlook for that gauge. Green means below the warning threshold; gray means the gauge is offline or has no threshold. Rock Creek has been gray since launch because USGS stopped serving its data, though Google still forecasts its basin.
-2. Click a marker. The panel shows current flow, the 12-hour forecast, that gauge's own thresholds, and the catchment that drains to it outlined on the map.
-3. "Compare model predictions" opens a week of hindsight along the bottom: what the CNN and Google each predicted, drawn over what actually happened, with the error of each. The rainfall bars along the top of that chart explain most of the disagreements.
+1. Marker color is the gauge's risk tier — whichever is worse of the current flow and the forecast 12-hour peak, held against that gauge's own thresholds: green (normal), then warning, danger, and extreme. Gray means the gauge is offline or has no thresholds. Rock Creek has been gray since launch because USGS stopped serving its data, though Google still forecasts its basin.
+2. Click a marker. The panel shows current flow, the 12-hour forecast, and that gauge's own thresholds. Five of the seven gauges also get the catchment that drains to them outlined on the map; NW Anacostia and Watts Branch drain basins too small for HydroBASINS, so they have no outline (and no Google forecast — see above).
+3. "Compare model predictions" opens a week of hindsight along the bottom: what the CNN predicted, drawn over what actually happened, with the model's error over that week. Google's next-day forecasts join the chart for the five Google-mapped gauges; on the other two the Google score shows "—". The rainfall bars along the top of that chart explain most of the disagreements.
 
 To run your own copy, fork the repo, add `GOOGLE_FLOOD_API_KEY` as an Actions secret (`USGS_API_KEY` is optional), enable GitHub Pages, and the forecast workflow handles the rest on a 2-hour schedule. To point it at different rivers, see "Adding a gauge" above.
 

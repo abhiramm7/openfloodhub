@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from .dataset import PAST_STEPS, FUTURE_STEPS, Scaler
+from .dataset import PAST_STEPS, FUTURE_STEPS, Scaler, encode_window
 from .model import FloodCNN
 from .sites import SITES, BY_ID
 
@@ -34,8 +34,11 @@ def predict_gauge(gauge_id: str) -> dict | None:
     model.eval()
 
     from .fetch import fetch_hourly_live
-    df_live = fetch_hourly_live(gauge_id, days_back=2)
-    site = BY_ID[gauge_id]
+    # One fetch serves both the live window and the 7-day backtest below.
+    # Reaching back 10 days also clears ERA5-Land's ~5-day lag, so the
+    # soil-moisture channel carries real antecedent values instead of an
+    # all-NaN tail that collapses to the training mean.
+    df_live = fetch_hourly_live(gauge_id, days_back=10)
 
     flow_valid = df_live['flow_m3s'].dropna()
     if len(flow_valid) < PAST_STEPS:
@@ -47,25 +50,14 @@ def predict_gauge(gauge_id: str) -> dict | None:
     fut_idx = pd.date_range(start=issue_time + pd.Timedelta(hours=1),
                             periods=FUTURE_STEPS, freq='h')
 
-    flow_past = df_live['flow_m3s'].reindex(past_idx).interpolate(limit=4).values
-    precip_past = df_live['precip_mm'].reindex(past_idx).fillna(0).values
-    precip_fut = df_live['precip_mm'].reindex(fut_idx).fillna(0).values
-    temp_past = df_live['temp_c'].reindex(past_idx).interpolate(limit=4).values
-    sm_past = (df_live['sm_surface'].reindex(past_idx)
-                .ffill().bfill().fillna(scaler.sm_mean).values)
-
-    if np.isnan(flow_past).any() or np.isnan(temp_past).any():
+    # Fetch already bridged small interior flow gaps (limit=4); no second
+    # fill pass here, or an 8-hour dropout would sneak past the NaN guard
+    # inside encode_window.
+    win = encode_window(df_live, past_idx, fut_idx, scaler)
+    if win is None:
         print(f'  {gauge_id}: missing values in input window')
         return None
-
-    # Encode and run (4-channel past stream + 1-channel future precip)
-    past_enc = np.stack([
-        scaler.encode_flow(flow_past),
-        scaler.encode_precip(precip_past),
-        scaler.encode_temp(temp_past),
-        scaler.encode_sm(sm_past),
-    ], axis=0).astype(np.float32)
-    fut_enc = scaler.encode_precip(precip_fut)[None, :].astype(np.float32)
+    past_enc, fut_enc, raw = win
 
     with torch.no_grad():
         pred = model(torch.from_numpy(past_enc[None]),
@@ -77,50 +69,43 @@ def predict_gauge(gauge_id: str) -> dict | None:
     # predicted (p), and/or precip values. The CNN's hourly nature is encoded
     # by using full ISO datetimes; the chart auto-detects.
     series = []
-    for t, v, p in zip(past_idx, flow_past, precip_past):
+    for t, v, p in zip(past_idx, raw['flow'], raw['precip_past']):
         series.append({'d': t.strftime('%Y-%m-%dT%H:00Z'),
                        'o': round(float(v), 3),
                        'precip_mm': round(float(p), 2)})
-    for t, v, p in zip(fut_idx, pred_m3s, precip_fut):
+    for t, v, p in zip(fut_idx, pred_m3s, raw['precip_fut']):
         series.append({'d': t.strftime('%Y-%m-%dT%H:00Z'),
                        'p': round(float(v), 3),
                        'precip_mm': round(float(p), 2)})
 
-    # Historical backtest — rolling 1h-ahead predictions over the last 30 days
-    # so the UI can show model-vs-actual performance for the recent past.
-    backtest_series = backtest_gauge(gauge_id, model, scaler, cfg,
-                                      days_back=30, issue_anchor=issue_time)
+    # Historical backtest — rolling predictions over the last 7 days (the
+    # window the UI renders), replayed on the frame fetched above.
+    backtest_series = backtest_gauge(model, scaler, cfg, df_live,
+                                     days_back=7, issue_anchor=issue_time)
 
     return {
         'id': gauge_id,
         'issue_time': issue_time.strftime('%Y-%m-%dT%H:00Z'),
         'series': series,                  # 24h obs + 12h forecast (active window)
-        'backtest': backtest_series,        # rolling 1h-ahead over last 7 days
+        'backtest': backtest_series,        # rolling 1h/6h/12h-ahead over last 7 days
         'metrics': ckpt['metrics'],
     }
 
 
-def backtest_gauge(gauge_id: str, model, scaler, cfg, days_back: int = 30,
+def backtest_gauge(model, scaler, cfg, df: pd.DataFrame, days_back: int = 7,
                    issue_anchor: pd.Timestamp | None = None) -> list[dict]:
     """For each hour in the last `days_back` days, generate the CNN's 12-hour
     forecast that *would* have been issued at that hour. Return a list of
-    {t, obs, pred_1h, pred_6h, pred_12h} for plotting model trace vs reality.
+    {t, o, p1, p6, p12} rows for plotting model trace vs reality.
 
-    We use the stored parquet (USGS observed flow + Open-Meteo archive ERA5
-    forcings) so this is a true historical replay using the same input shape
-    the model was trained on.
+    Replays over the same frame predict_gauge fetched (one fetch per gauge
+    per run), through the same encode_window path as the live forecast, so
+    the published skill is scored on the pipeline the live path actually uses.
     """
-    from .fetch import DATA_DIR
-    parquet = DATA_DIR / gauge_id / 'hourly.parquet'
-    if parquet.exists():
-        df = pd.read_parquet(parquet)
-    else:
-        # CI mode — no local cache. Fetch directly.
-        from .fetch import fetch_hourly_live
-        df = fetch_hourly_live(gauge_id, days_back=days_back + 1)
-        if df['flow_m3s'].dropna().empty:
-            return []
-    end_t = df['flow_m3s'].dropna().index.max()
+    flow_valid = df['flow_m3s'].dropna()
+    if flow_valid.empty:
+        return []
+    end_t = flow_valid.index.max()
     if issue_anchor is not None:
         # Don't backtest past the live issue time (no point — that's the live forecast region)
         end_t = min(end_t, issue_anchor - pd.Timedelta(hours=1))
@@ -128,12 +113,6 @@ def backtest_gauge(gauge_id: str, model, scaler, cfg, days_back: int = 30,
 
     past_steps = cfg['past_steps']
     future_steps = cfg['future_steps']
-    # Pre-resolve soil-moisture from ERA5 with forward/back fill so the
-    # 5-day archive lag near "now" doesn't kill recent windows.
-    if 'sm_surface' in df.columns:
-        sm_series = df['sm_surface'].ffill().bfill()
-    else:
-        sm_series = pd.Series(scaler.sm_mean, index=df.index)
     times = pd.date_range(start=start_t, end=end_t, freq='h')
     past_batch = []
     fut_batch = []
@@ -142,20 +121,10 @@ def backtest_gauge(gauge_id: str, model, scaler, cfg, days_back: int = 30,
     for cur in times:
         past_idx = pd.date_range(end=cur - pd.Timedelta(hours=1), periods=past_steps, freq='h')
         fut_idx = pd.date_range(start=cur, periods=future_steps, freq='h')
-        flow_past = df['flow_m3s'].reindex(past_idx).values
-        precip_past = df['precip_mm'].reindex(past_idx).fillna(0).values
-        precip_fut = df['precip_mm'].reindex(fut_idx).fillna(0).values
-        temp_past = df['temp_c'].reindex(past_idx).interpolate(limit=2).values
-        sm_past = sm_series.reindex(past_idx).fillna(scaler.sm_mean).values
-        if np.isnan(flow_past).any() or np.isnan(temp_past).any():
+        win = encode_window(df, past_idx, fut_idx, scaler)
+        if win is None:
             continue
-        past_enc = np.stack([
-            scaler.encode_flow(flow_past),
-            scaler.encode_precip(precip_past),
-            scaler.encode_temp(temp_past),
-            scaler.encode_sm(sm_past),
-        ], axis=0).astype(np.float32)
-        fut_enc = scaler.encode_precip(precip_fut)[None, :].astype(np.float32)
+        past_enc, fut_enc, _ = win
         past_batch.append(past_enc)
         fut_batch.append(fut_enc)
         valid_t.append(cur)

@@ -55,6 +55,46 @@ class Scaler:
         return (x - self.sm_mean) / self.sm_std
 
 
+def encode_window(df: pd.DataFrame, past_idx: pd.DatetimeIndex,
+                  fut_idx: pd.DatetimeIndex, scaler: Scaler
+                  ) -> tuple[np.ndarray, np.ndarray, dict] | None:
+    """Assemble and encode one inference window from an hourly frame.
+
+    Single source of truth for the fill policy shared by live inference and
+    the backtest replay in predict.py, so the two paths can't drift:
+      flow    no filling here — fetch already bridged small interior gaps,
+              so a NaN left over is real missing data and refuses the window
+      precip  missing hours count as 0 mm
+      temp    interpolate up to 4 h
+      sm      ffill/bfill inside the window, then scaler.sm_mean
+
+    Returns (past_enc (4, 24), fut_enc (1, 12), raw) where raw carries the
+    unencoded flow/precip arrays for display, or None if flow or temp still
+    has NaNs after filling.
+    """
+    flow_past = df['flow_m3s'].reindex(past_idx).values
+    precip_past = df['precip_mm'].reindex(past_idx).fillna(0).values
+    precip_fut = df['precip_mm'].reindex(fut_idx).fillna(0).values
+    temp_past = df['temp_c'].reindex(past_idx).interpolate(limit=4).values
+    if 'sm_surface' in df.columns:
+        sm_past = (df['sm_surface'].reindex(past_idx)
+                   .ffill().bfill().fillna(scaler.sm_mean).values)
+    else:
+        sm_past = np.full(len(past_idx), scaler.sm_mean)
+    if np.isnan(flow_past).any() or np.isnan(temp_past).any():
+        return None
+    past_enc = np.stack([
+        scaler.encode_flow(flow_past),
+        scaler.encode_precip(precip_past),
+        scaler.encode_temp(temp_past),
+        scaler.encode_sm(sm_past),
+    ], axis=0).astype(np.float32)
+    fut_enc = scaler.encode_precip(precip_fut)[None, :].astype(np.float32)
+    return past_enc, fut_enc, {'flow': flow_past,
+                               'precip_past': precip_past,
+                               'precip_fut': precip_fut}
+
+
 def build_windows(df: pd.DataFrame, scaler: Scaler | None = None
                   ) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[pd.Timestamp]]:
     """Slide a 24+12 window across the hourly DataFrame, dropping any window
@@ -67,7 +107,8 @@ def build_windows(df: pd.DataFrame, scaler: Scaler | None = None
     precip = df['precip_mm'].fillna(0).values
     temp = df['temp_c'].fillna(np.nanmean(df['temp_c'])).values
     # ERA5 SM has gaps near present; ffill in the caller covers the lag.
-    sm = df['sm_surface'].ffill().bfill().fillna(0.35).values
+    sm = (df['sm_surface'].ffill().bfill()
+          .fillna(scaler.sm_mean if scaler is not None else 0.35).values)
     idx = df.index
 
     n = len(df)
