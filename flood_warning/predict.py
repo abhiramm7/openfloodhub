@@ -248,24 +248,29 @@ def run_all():
             p = predict_gauge(site['id'])
         except Exception as e:
             print(f'  ! {site["id"]}: {e}')
-            continue
-        if p:
-            # Site metadata so the UI can place + label markers without a
-            # second file.
-            p['name'] = site['name']
-            p['short'] = site['short']
-            p['lat'] = site['lat']
-            p['lon'] = site['lon']
-            p['drainage_sqmi'] = site['drainage_sqmi']
-            p['kind'] = site['kind']
-            if site['id'] in thresh:
-                p['thresholds'] = thresh[site['id']]
-            preds.append(p)
-            forecasts = [e for e in p['series'] if 'p' in e]
-            if forecasts:
-                f1, f12 = forecasts[0], forecasts[-1]
-                print(f'  {site["id"]} {site["short"]:<16}  +1h={f1["p"]:6.2f}  '
-                      f'+12h={f12["p"]:6.2f} m³/s  (issued {p["issue_time"]})')
+            p = None
+        if p is None:
+            # Keep the gauge on the map as an explicit "offline" marker — a
+            # silently missing site looks like a UI bug (Rock Creek's USGS
+            # feed has been dark since before launch and nobody could tell).
+            p = {'id': site['id'], 'status': 'offline',
+                 'series': [], 'backtest': []}
+        # Site metadata so the UI can place + label markers without a
+        # second file.
+        p['name'] = site['name']
+        p['short'] = site['short']
+        p['lat'] = site['lat']
+        p['lon'] = site['lon']
+        p['drainage_sqmi'] = site['drainage_sqmi']
+        p['kind'] = site['kind']
+        if site['id'] in thresh:
+            p['thresholds'] = thresh[site['id']]
+        preds.append(p)
+        forecasts = [e for e in p['series'] if 'p' in e]
+        if forecasts:
+            f1, f12 = forecasts[0], forecasts[-1]
+            print(f'  {site["id"]} {site["short"]:<16}  +1h={f1["p"]:6.2f}  '
+                  f'+12h={f12["p"]:6.2f} m³/s  (issued {p["issue_time"]})')
 
     # NOAA / NWS comparison overlays — fetched once per gauge and bundled into
     # each prediction record so the UI can draw them alongside the CNN forecast.

@@ -31,12 +31,21 @@ USGS_API_KEY = os.environ.get('USGS_API_KEY')
 CFS_TO_M3S = 0.0283168
 
 
-def _http_get(url: str, headers: dict | None = None, timeout: int = 120) -> bytes:
+def _http_get(url: str, headers: dict | None = None, timeout: int = 120,
+              retries: int = 3) -> bytes:
+    # USGS/Open-Meteo intermittently drop TLS handshakes (seen ~daily in CI);
+    # a single failed request must not cost a gauge its forecast for 2 hours.
     h = {'User-Agent': UA}
     if headers:
         h.update(headers)
-    return urllib.request.urlopen(
-        urllib.request.Request(url, headers=h), timeout=timeout).read()
+    req = urllib.request.Request(url, headers=h)
+    for attempt in range(retries):
+        try:
+            return urllib.request.urlopen(req, timeout=timeout).read()
+        except Exception:
+            if attempt == retries - 1:
+                raise
+            time.sleep(2 * (attempt + 1))
 
 
 def fetch_usgs_hourly(gauge_id: str, start: str, end: str) -> pd.Series:

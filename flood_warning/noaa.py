@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import urllib.error
 import urllib.request
 
@@ -41,14 +42,23 @@ CFS_TO_M3S = 0.0283168
 IN_TO_MM = 25.4
 
 
-def _get(url: str, timeout: int = 30) -> dict | None:
-    try:
-        req = urllib.request.Request(url, headers={'User-Agent': UA, 'Accept': 'application/json'})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return json.loads(r.read().decode())
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError) as e:
-        print(f'   ! NOAA {url[-70:]}: {e}')
-        return None
+def _get(url: str, timeout: int = 30, retries: int = 3) -> dict | None:
+    # NWPS regularly drops or times out a single request (same flakiness as
+    # USGS/Open-Meteo in fetch.py) — retry before giving the overlay up.
+    req = urllib.request.Request(url, headers={'User-Agent': UA, 'Accept': 'application/json'})
+    for attempt in range(retries):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return json.loads(r.read().decode())
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError) as e:
+            # 404 means the resource doesn't exist for this gauge — no retry.
+            if isinstance(e, urllib.error.HTTPError) and e.code == 404:
+                print(f'   ! NOAA {url[-70:]}: {e}')
+                return None
+            if attempt == retries - 1:
+                print(f'   ! NOAA {url[-70:]}: {e}')
+                return None
+            time.sleep(2 * (attempt + 1))
 
 
 def fetch_gauge(usgs_id: str) -> dict | None:

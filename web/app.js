@@ -14,9 +14,15 @@ const FLOW = getCSS('--flow');
 function getCSS(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
 
 const map = L.map('map', { zoomControl: true }).setView([38.9072, -77.0369], 11);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-  attribution: '&copy; OpenStreetMap &copy; CARTO',
-  subdomains: 'abcd', maxZoom: 19,
+// CARTO's keyless basemap now watermarks every tile with "API KEY REQUIRED";
+// Esri's Light Gray Canvas is the same muted style and needs no key.
+// Native tiles stop at z16 — Leaflet upscales beyond that.
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+  attribution: '&copy; Esri, HERE, Garmin &copy; OpenStreetMap contributors',
+  maxNativeZoom: 16, maxZoom: 19,
+}).addTo(map);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+  maxNativeZoom: 16, maxZoom: 19,
 }).addTo(map);
 
 let SELECTED = null;
@@ -56,6 +62,7 @@ function forecastPeak(p) {
   return fc.length ? Math.max(...fc) : null;
 }
 function riskOf(p) {
+  if (!p.series.length) return { key: 'offline', label: 'Gauge offline', color: RISK.nodata };
   const th = p.thresholds;
   if (!th) return { key: 'nodata', label: 'No threshold', color: RISK.nodata };
   const peak = Math.max(currentFlow(p) ?? 0, forecastPeak(p) ?? 0);
@@ -119,7 +126,7 @@ function renderPanel(p) {
     <div class="info-grid">
       <div><div class="k">Current flow</div><div class="v">${cur != null ? fmt(cur) + ' m³/s' : '—'}</div></div>
       <div><div class="k">12h forecast peak</div><div class="v">${peak != null ? fmt(peak) + ' m³/s' : '—'}</div></div>
-      <div><div class="k">Issued</div><div class="v">${fmtTime(p.issue_time)}</div></div>
+      <div><div class="k">Issued</div><div class="v">${p.issue_time ? fmtTime(p.issue_time) : '—'}</div></div>
       <div><div class="k">Forecast horizon</div><div class="v">12 hours</div></div>
     </div>
 
@@ -145,10 +152,11 @@ function chartSVG(p) {
 
   const obs = p.series.filter(e => 'o' in e).map(e => ({ t: +new Date(e.d), v: e.o }));
   const fc  = p.series.filter(e => 'p' in e).map(e => ({ t: +new Date(e.d), v: e.p }));
-  if (!obs.length && !fc.length) return `<svg width="${W}" height="${H}"></svg>`;
 
-  // NWM short-range overlay clipped to the chart's time window.
+  // NWM short-range overlay clipped to the chart's time window. When the
+  // gauge itself is offline this is the only series — still worth drawing.
   const nwm = (p.noaa_nwm || []).map(e => ({ t: +new Date(e.t), v: e.flow_m3s }));
+  if (!obs.length && !fc.length && nwm.length < 2) return `<svg width="${W}" height="${H}"></svg>`;
 
   const all = [...obs, ...fc, ...nwm];
   const tMin = Math.min(...all.map(d => d.t));
