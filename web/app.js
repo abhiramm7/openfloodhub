@@ -26,6 +26,7 @@ L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_L
 }).addTo(map);
 
 let SELECTED = null;
+let SELECTED_P = null;   // the selected prediction record (drives the drawer)
 const MARKERS = {};
 let BASINS = {};        // usgs id -> {gauge_id, up_area_km2, geometry}
 let BASIN_LAYER = null; // contributing-area polygon for the selected gauge
@@ -51,6 +52,10 @@ async function main() {
   }
 
   document.getElementById('panelClose').onclick = deselect;
+  document.getElementById('compareClose').onclick = closeCompare;
+  window.addEventListener('resize', () => {
+    if (SELECTED_P && !document.getElementById('compare').hidden) renderCompare(SELECTED_P);
+  });
 
   // Auto-open the marquee gauge so the panel isn't empty on load.
   const potomac = data.predictions.find(p => p.id === '01646500') || data.predictions[0];
@@ -91,17 +96,22 @@ function select(p) {
     MARKERS[SELECTED].marker.setStyle(markerStyle(MARKERS[SELECTED].risk, false));
   }
   SELECTED = p.id;
+  SELECTED_P = p;
   MARKERS[p.id].marker.setStyle(markerStyle(MARKERS[p.id].risk, true));
   showBasin(p);
   renderPanel(p);
   document.getElementById('panel').classList.add('open');
+  // Drawer follows the selection while it's open.
+  if (!document.getElementById('compare').hidden) renderCompare(p);
 }
 function deselect() {
   if (SELECTED && MARKERS[SELECTED]) {
     MARKERS[SELECTED].marker.setStyle(markerStyle(MARKERS[SELECTED].risk, false));
   }
   SELECTED = null;
+  SELECTED_P = null;
   hideBasin();
+  closeCompare();
   document.getElementById('panel').classList.remove('open');
 }
 
@@ -168,14 +178,25 @@ function renderPanel(p) {
       ${hybasRow(p)}
     </div>
 
-    ${compareSection(p)}
+    <div class="section-title compare-toggle" id="cmpToggle">
+      Compare model predictions — last 7 days <span style="float:right">▸</span></div>
+
+    ${sourcesBox()}
   `;
-  const tgl = document.getElementById('cmpToggle');
-  if (tgl) tgl.onclick = () => {
-    const b = document.getElementById('cmpBody');
-    b.hidden = !b.hidden;
-    document.getElementById('cmpChev').textContent = b.hidden ? '▸' : '▾';
-  };
+  document.getElementById('cmpToggle').onclick = () => openCompare(p);
+}
+
+function sourcesBox() {
+  return `<div class="sources-box">
+    <div class="title">Data sources &amp; credits</div>
+    <div class="row">Streamflow — <a href="https://waterservices.usgs.gov/" target="_blank" rel="noopener">USGS NWIS</a></div>
+    <div class="row">Weather forcings — <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (ERA5-Land)</div>
+    <div class="row">NWM streamflow &amp; QPF — <a href="https://api.water.noaa.gov/nwps/v1/docs/" target="_blank" rel="noopener">NOAA/NWS</a> · MRMS via <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">IEM</a></div>
+    <div class="row">Flood forecasts — <a href="https://developers.google.com/flood-forecasting" target="_blank" rel="noopener">Google Flood Forecasting API</a> (CC BY 4.0)</div>
+    <div class="row">Basins — <a href="https://www.hydrosheds.org/products/hydrobasins" target="_blank" rel="noopener">HydroBASINS</a> © HydroSHEDS</div>
+    <div class="row">Basemap — Esri World Light Gray Canvas</div>
+    <div class="row">12h forecast — OpenFloodHub per-gauge CNN (<a href="https://github.com/abhiramm7/openfloodhub" target="_blank" rel="noopener">source</a>)</div>
+  </div>`;
 }
 
 function hybasRow(p) {
@@ -201,35 +222,47 @@ function googleRow(p) {
     <div class="v" style="color:${color}">${label}${trend}</div></div>`;
 }
 
-/* ---- model comparison (last 7 days) ------------------------------------- */
+/* ---- model comparison drawer (last 7 days, full width) ------------------ */
 
-function compareSection(p) {
-  const obs = (p.backtest || []).slice(-168)
-    .filter(e => e.o != null).map(e => ({ t: +new Date(e.t), v: e.o }));
-  const cnn = (p.backtest || []).slice(-168)
-    .filter(e => e.p12 != null).map(e => ({ t: +new Date(e.t), v: e.p12 }));
-  const goog = ((p.google_flood && p.google_flood.backtest) || [])
-    .map(e => ({ t: +new Date(e.t), v: e.v }));
-
-  let body;
-  if (!obs.length && !goog.length) {
-    body = `<div class="chart-note">No stored predictions for this gauge yet.</div>`;
-  } else {
-    body = compareSVG(obs, cnn, goog) + compareStats(obs, cnn, goog);
-  }
-  return `
-    <div class="section-title compare-toggle" id="cmpToggle">
-      Compare model predictions — last 7 days <span id="cmpChev">▸</span></div>
-    <div id="cmpBody" hidden>
-      <div class="chart-note" style="margin:0 0 8px">Each model's past predictions
-        replayed against what the river actually did: the CNN's 12h-ahead forecast
-        (dashed) and Google's next-day forecast (dash-dot points) vs observed (solid).</div>
-      ${body}
-    </div>`;
+function compareData(p) {
+  return {
+    obs: (p.backtest || []).slice(-168)
+      .filter(e => e.o != null).map(e => ({ t: +new Date(e.t), v: e.o })),
+    cnn: (p.backtest || []).slice(-168)
+      .filter(e => e.p12 != null).map(e => ({ t: +new Date(e.t), v: e.p12 })),
+    goog: ((p.google_flood && p.google_flood.backtest) || [])
+      .map(e => ({ t: +new Date(e.t), v: e.v })),
+  };
 }
 
-function compareSVG(obs, cnn, goog) {
-  const W = 344, H = 170, M = { t: 12, r: 10, b: 20, l: 38 };
+function openCompare(p) {
+  document.getElementById('compare').hidden = false;
+  renderCompare(p);
+}
+function closeCompare() {
+  document.getElementById('compare').hidden = true;
+}
+function renderCompare(p) {
+  const { obs, cnn, goog } = compareData(p);
+  document.getElementById('compareTitle').textContent =
+    `${p.name} — model predictions vs observed, last 7 days`;
+  const body = document.getElementById('compareBody');
+  if (!obs.length && !goog.length) {
+    body.innerHTML = `<div class="chart-note">No stored predictions for this gauge yet.</div>`;
+    return;
+  }
+  const W = Math.max(360, body.clientWidth || (window.innerWidth - 40));
+  body.innerHTML = `
+    <div class="chart-note" style="margin:2px 0 8px">Each model's past predictions
+      replayed against what the river actually did: the CNN's 12h-ahead forecast
+      (dashed) and Google Flood Hub's next-day forecast (dash-dot points) vs observed
+      flow (solid), m³/s.</div>
+    ${compareSVG(obs, cnn, goog, W, 220)}
+    ${compareStats(obs, cnn, goog)}`;
+}
+
+function compareSVG(obs, cnn, goog, W, H) {
+  const M = { t: 12, r: 14, b: 20, l: 44 };
   const pw = W - M.l - M.r, ph = H - M.t - M.b;
   const all = [...obs, ...cnn, ...goog];
   const tMin = Math.min(...all.map(d => d.t)), tMax = Math.max(...all.map(d => d.t));
@@ -243,8 +276,8 @@ function compareSVG(obs, cnn, goog) {
   const line = pts => pts.map((d, i) => (i ? 'L' : 'M') + x(d.t).toFixed(1) + ' ' + y(d.v).toFixed(1)).join(' ');
 
   let svg = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
-  for (let i = 0; i <= 3; i++) {
-    const v = bot + ((top - bot) / 3) * i, yy = y(v);
+  for (let i = 0; i <= 4; i++) {
+    const v = bot + ((top - bot) / 4) * i, yy = y(v);
     svg += `<line x1="${M.l}" y1="${yy}" x2="${W - M.r}" y2="${yy}" stroke="var(--line)" stroke-width="1"/>`;
     svg += `<text class="axis-label" x="${M.l - 6}" y="${yy + 3}" text-anchor="end">${fmtAxis(v)}</text>`;
   }
@@ -252,8 +285,12 @@ function compareSVG(obs, cnn, goog) {
   if (cnn.length > 1) svg += `<path d="${line(cnn)}" fill="none" stroke="${FLOW}" stroke-width="1.4" stroke-dasharray="4 3" opacity="0.85"/>`;
   if (goog.length > 1) svg += `<path d="${line(goog)}" fill="none" stroke="#00897b" stroke-width="1.4" stroke-dasharray="6 3 1.5 3" opacity="0.9"/>`;
   for (const d of goog) svg += `<circle cx="${x(d.t)}" cy="${y(d.v)}" r="2.6" fill="#00897b"/>`;
-  svg += `<text class="axis-label" x="${M.l}" y="${H - 5}" text-anchor="start">${fmtTick(tMin)}</text>`;
-  svg += `<text class="axis-label" x="${W - M.r}" y="${H - 5}" text-anchor="end">${fmtTick(tMax)}</text>`;
+  for (let i = 0; i <= 4; i++) {
+    const t = tMin + ((tMax - tMin) / 4) * i;
+    const anchor = i === 0 ? 'start' : i === 4 ? 'end' : 'middle';
+    const xx = i === 0 ? M.l : i === 4 ? W - M.r : x(t);
+    svg += `<text class="axis-label" x="${xx}" y="${H - 5}" text-anchor="${anchor}">${fmtTick(t)}</text>`;
+  }
   return svg + '</svg>';
 }
 
