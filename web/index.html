@@ -69,6 +69,9 @@
   #riskcard .title { font-weight: 600; margin-bottom: 8px; font-size: 12px; }
   #riskcard .row { display: flex; align-items: center; gap: 8px; margin: 5px 0; color: var(--muted); }
   #riskcard .row .dot { width: 10px; height: 10px; border-radius: 50%; }
+  #riskcard .sep { border-top: 1px solid var(--line); margin: 9px 0 7px; }
+  .compare-toggle { cursor: pointer; user-select: none; }
+  .compare-toggle:hover { color: var(--flow); }
   .leaflet-container { background: #eef1f4; }
   .chart-note { font-size: 11px; color: var(--muted); margin-top: 8px; }
 </style>
@@ -94,10 +97,16 @@
     <div class="row"><span class="dot" style="background:var(--danger)"></span> Danger</div>
     <div class="row"><span class="dot" style="background:var(--extreme)"></span> Extreme</div>
     <div class="row"><span class="dot" style="background:var(--nodata)"></span> No data / offline</div>
+    <div class="sep"></div>
+    <div class="title">Chart lines</div>
+    <div class="row"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#1a73e8" stroke-width="2.2"/></svg> Observed flow</div>
+    <div class="row"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#1a73e8" stroke-width="2.2" stroke-dasharray="4 3"/></svg> CNN forecast</div>
+    <div class="row"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#7b61ff" stroke-width="1.5" stroke-dasharray="1.5 2.5"/></svg> NOAA NWM</div>
+    <div class="row"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#00897b" stroke-width="1.5" stroke-dasharray="6 3 1.5 3"/></svg> Google Flood Hub</div>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

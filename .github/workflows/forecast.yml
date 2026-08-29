@@ -54,6 +54,9 @@ jobs:
           else
             git add web/preds.json
             git commit -m "data: refresh forecasts ($(date -u +%Y-%m-%dT%H:%MZ))"
+            # A code push landing mid-run makes a plain push fail; rebase our
+            # one data commit on top instead of failing the whole run.
+            git pull --rebase origin main
             git push
           fi
 

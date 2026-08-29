@@ -121,7 +121,9 @@ done                                              # ~90s per gauge on CPU
 
 NWM streamflow and NWS QPF come from unauthenticated NOAA APIs ([NWPS](https://api.water.noaa.gov/nwps/v1/docs/), [api.weather.gov](https://www.weather.gov/documentation/services-web-api)); MRMS observed precip is pulled per-point from the [Iowa Environmental Mesonet](https://mesonet.agron.iastate.edu/) IEMRE service.
 
-The Google overlay uses the [Flood Forecasting API](https://developers.google.com/flood-forecasting) (the engine behind [Flood Hub](https://g.co/floodhub)) and needs a `GOOGLE_FLOOD_API_KEY` in `.env.local` (Actions secret in CI); without one it's silently skipped. Google's US gauges are HYBAS virtual points at basin outlets, so `google_gauges.json` maps each USGS site to its basin-matched Google gauge — 5 of the 7 sites have one (NW Anacostia and Watts Branch drain basins too small for HYBAS coverage).
+The Google overlay uses the [Flood Forecasting API](https://developers.google.com/flood-forecasting) (the engine behind [Flood Hub](https://g.co/floodhub)) and needs a `GOOGLE_FLOOD_API_KEY` in `.env.local` (Actions secret in CI); without one it's silently skipped. Google's US gauges are HYBAS virtual points at basin outlets, so `google_gauges.json` maps each USGS site to its basin-matched Google gauge — 5 of the 7 sites have one (NW Anacostia and Watts Branch drain basins too small for HYBAS coverage). `google_flood` also carries the past week of Google's next-day forecasts, which the gauge panel's "Compare model predictions" section scores against observed flow alongside the CNN's own 12h-ahead backtest.
+
+Selecting a gauge also outlines its HYBAS contributing area (`web/basins.json`, ~12 KB) — upstream unions of [HydroBASINS](https://www.hydrosheds.org/products/hydrobasins) level-12 catchments, built offline once; rebuild it if `google_gauges.json` changes.
 
 ## Adding a gauge
 

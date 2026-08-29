@@ -27,11 +27,17 @@ L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_L
 
 let SELECTED = null;
 const MARKERS = {};
+let BASINS = {};        // usgs id -> {gauge_id, up_area_km2, geometry}
+let BASIN_LAYER = null; // contributing-area polygon for the selected gauge
 
 main();
 
 async function main() {
-  const data = await (await fetch('preds.json', { cache: 'no-store' })).json();
+  const [data, basins] = await Promise.all([
+    fetch('preds.json', { cache: 'no-store' }).then(r => r.json()),
+    fetch('basins.json').then(r => r.ok ? r.json() : {}).catch(() => ({})),
+  ]);
+  BASINS = basins;
   document.getElementById('updated').textContent =
     'Updated ' + fmtAge(data.updated);
 
@@ -86,6 +92,7 @@ function select(p) {
   }
   SELECTED = p.id;
   MARKERS[p.id].marker.setStyle(markerStyle(MARKERS[p.id].risk, true));
+  showBasin(p);
   renderPanel(p);
   document.getElementById('panel').classList.add('open');
 }
@@ -94,7 +101,24 @@ function deselect() {
     MARKERS[SELECTED].marker.setStyle(markerStyle(MARKERS[SELECTED].risk, false));
   }
   SELECTED = null;
+  hideBasin();
   document.getElementById('panel').classList.remove('open');
+}
+
+/* ---- HYBAS contributing area -------------------------------------------- */
+
+function showBasin(p) {
+  hideBasin();
+  const b = BASINS[p.id];
+  if (!b) return;
+  BASIN_LAYER = L.geoJSON(b.geometry, {
+    style: { color: '#00897b', weight: 1.5, fillColor: '#00897b',
+             fillOpacity: 0.08, dashArray: '4 3' },
+    interactive: false,
+  }).addTo(map);
+}
+function hideBasin() {
+  if (BASIN_LAYER) { map.removeLayer(BASIN_LAYER); BASIN_LAYER = null; }
 }
 
 /* ---- detail panel ------------------------------------------------------- */
@@ -141,8 +165,25 @@ function renderPanel(p) {
       <div><div class="k">Catchment</div><div class="v" style="text-transform:capitalize">${p.kind}</div></div>
       <div><div class="k">Record</div><div class="v">${th ? th.record_years + ' yr' : '—'}</div></div>
       ${googleRow(p)}
+      ${hybasRow(p)}
     </div>
+
+    ${compareSection(p)}
   `;
+  const tgl = document.getElementById('cmpToggle');
+  if (tgl) tgl.onclick = () => {
+    const b = document.getElementById('cmpBody');
+    b.hidden = !b.hidden;
+    document.getElementById('cmpChev').textContent = b.hidden ? '▸' : '▾';
+  };
+}
+
+function hybasRow(p) {
+  const b = BASINS[p.id];
+  if (!b) return '';
+  const sqmi = b.up_area_km2 / 2.58999;
+  return `<div><div class="k">HYBAS basin (shown on map)</div>
+    <div class="v">${sqmi >= 100 ? Math.round(sqmi).toLocaleString() : sqmi.toFixed(1)} mi²</div></div>`;
 }
 
 function googleRow(p) {
@@ -158,6 +199,88 @@ function googleRow(p) {
   const trend = { RISE: ' ↑', FALL: ' ↓', NO_CHANGE: ' →' }[g.trend] || '';
   return `<div><div class="k">Google Flood Hub</div>
     <div class="v" style="color:${color}">${label}${trend}</div></div>`;
+}
+
+/* ---- model comparison (last 7 days) ------------------------------------- */
+
+function compareSection(p) {
+  const obs = (p.backtest || []).slice(-168)
+    .filter(e => e.o != null).map(e => ({ t: +new Date(e.t), v: e.o }));
+  const cnn = (p.backtest || []).slice(-168)
+    .filter(e => e.p12 != null).map(e => ({ t: +new Date(e.t), v: e.p12 }));
+  const goog = ((p.google_flood && p.google_flood.backtest) || [])
+    .map(e => ({ t: +new Date(e.t), v: e.v }));
+
+  let body;
+  if (!obs.length && !goog.length) {
+    body = `<div class="chart-note">No stored predictions for this gauge yet.</div>`;
+  } else {
+    body = compareSVG(obs, cnn, goog) + compareStats(obs, cnn, goog);
+  }
+  return `
+    <div class="section-title compare-toggle" id="cmpToggle">
+      Compare model predictions — last 7 days <span id="cmpChev">▸</span></div>
+    <div id="cmpBody" hidden>
+      <div class="chart-note" style="margin:0 0 8px">Each model's past predictions
+        replayed against what the river actually did: the CNN's 12h-ahead forecast
+        (dashed) and Google's next-day forecast (dash-dot points) vs observed (solid).</div>
+      ${body}
+    </div>`;
+}
+
+function compareSVG(obs, cnn, goog) {
+  const W = 344, H = 170, M = { t: 12, r: 10, b: 20, l: 38 };
+  const pw = W - M.l - M.r, ph = H - M.t - M.b;
+  const all = [...obs, ...cnn, ...goog];
+  const tMin = Math.min(...all.map(d => d.t)), tMax = Math.max(...all.map(d => d.t));
+  const vals = all.map(d => d.v);
+  let hi = Math.max(...vals), lo = Math.min(...vals);
+  const span = (hi - lo) || hi || 1;
+  const top = hi + span * 0.15, bot = Math.max(0, lo - span * 0.15);
+
+  const x = t => M.l + ((t - tMin) / (tMax - tMin || 1)) * pw;
+  const y = v => M.t + ph - ((v - bot) / (top - bot || 1)) * ph;
+  const line = pts => pts.map((d, i) => (i ? 'L' : 'M') + x(d.t).toFixed(1) + ' ' + y(d.v).toFixed(1)).join(' ');
+
+  let svg = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+  for (let i = 0; i <= 3; i++) {
+    const v = bot + ((top - bot) / 3) * i, yy = y(v);
+    svg += `<line x1="${M.l}" y1="${yy}" x2="${W - M.r}" y2="${yy}" stroke="var(--line)" stroke-width="1"/>`;
+    svg += `<text class="axis-label" x="${M.l - 6}" y="${yy + 3}" text-anchor="end">${fmtAxis(v)}</text>`;
+  }
+  if (obs.length > 1) svg += `<path d="${line(obs)}" fill="none" stroke="${FLOW}" stroke-width="2"/>`;
+  if (cnn.length > 1) svg += `<path d="${line(cnn)}" fill="none" stroke="${FLOW}" stroke-width="1.4" stroke-dasharray="4 3" opacity="0.85"/>`;
+  if (goog.length > 1) svg += `<path d="${line(goog)}" fill="none" stroke="#00897b" stroke-width="1.4" stroke-dasharray="6 3 1.5 3" opacity="0.9"/>`;
+  for (const d of goog) svg += `<circle cx="${x(d.t)}" cy="${y(d.v)}" r="2.6" fill="#00897b"/>`;
+  svg += `<text class="axis-label" x="${M.l}" y="${H - 5}" text-anchor="start">${fmtTick(tMin)}</text>`;
+  svg += `<text class="axis-label" x="${W - M.r}" y="${H - 5}" text-anchor="end">${fmtTick(tMax)}</text>`;
+  return svg + '</svg>';
+}
+
+function compareStats(obs, cnn, goog) {
+  if (!obs.length) return `<div class="chart-note">No USGS observations to score against.</div>`;
+  const obsAt = new Map(obs.map(d => [d.t, d.v]));
+  // CNN 12h-ahead: hourly, scored against the observation at the same hour.
+  const cnnErr = cnn.filter(d => obsAt.has(d.t)).map(d => Math.abs(d.v - obsAt.get(d.t)));
+  // Google next-day: daily value, scored against that day's observed mean.
+  const dayMean = new Map();
+  for (const d of obs) {
+    const day = new Date(d.t).toISOString().slice(0, 10);
+    if (!dayMean.has(day)) dayMean.set(day, []);
+    dayMean.get(day).push(d.v);
+  }
+  const googErr = goog.map(d => {
+    const day = new Date(d.t).toISOString().slice(0, 10);
+    const m = dayMean.get(day);
+    return m ? Math.abs(d.v - m.reduce((a, b) => a + b) / m.length) : null;
+  }).filter(e => e != null);
+  const mae = a => a.length ? (a.reduce((x, y) => x + y) / a.length) : null;
+  const f = v => v == null ? '—' : (v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(2));
+  return `<div class="legend-row">
+    <div class="item"><span class="lbl">CNN 12h MAE</span><div class="val">${f(mae(cnnErr))} m³/s</div></div>
+    <div class="item"><span class="lbl">Google 1d MAE</span><div class="val">${f(mae(googErr))} m³/s</div></div>
+    <div class="item"><span class="lbl">Hours scored</span><div class="val">${cnnErr.length}</div></div>
+  </div>`;
 }
 
 /* ---- SVG chart ---------------------------------------------------------- */

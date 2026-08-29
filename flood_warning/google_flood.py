@@ -34,6 +34,7 @@ shown as status only, never drawn on the discharge chart.
 """
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import urllib.parse
@@ -167,8 +168,8 @@ def enrich_sites(usgs_ids: list[str]) -> dict[str, dict]:
                 'danger': th.get('dangerLevel'),
                 'extreme': th.get('extremeDangerLevel'),
             }
-        # Latest issued forecast only; each range becomes one point at its
-        # start time (start == end for instantaneous values).
+        # Latest issued forecast: each range becomes one point at its start
+        # time (start == end for instantaneous values).
         fset = (forecasts.get(gid) or {}).get('forecasts', [])
         if fset:
             latest = max(fset, key=lambda f: f.get('issuedTime', ''))
@@ -180,6 +181,28 @@ def enrich_sites(usgs_ids: list[str]) -> dict[str, dict]:
                     series.append({'t': t, 'v': round(float(v), 3)})
             series.sort(key=lambda r: r['t'])
             entry['forecast'] = series
+
+            # Past-week skill trace: the API returns everything issued in the
+            # last 7 days by default. Keep the newest forecast per issue day
+            # and take its 1-day-ahead value — what Google said *yesterday*
+            # about each day. The map's model-comparison panel plots these
+            # against observed flow next to the CNN's own backtest.
+            by_day = {}
+            for f in fset:
+                day = (f.get('issuedTime') or '')[:10]
+                if day and (day not in by_day
+                            or f['issuedTime'] > by_day[day]['issuedTime']):
+                    by_day[day] = f
+            bt = []
+            for day, f in sorted(by_day.items()):
+                target = (datetime.date.fromisoformat(day)
+                          + datetime.timedelta(days=1)).strftime('%Y-%m-%dT00:00:00Z')
+                for r in f.get('forecastRanges', []):
+                    if r.get('forecastStartTime') == target and r.get('value') is not None:
+                        bt.append({'t': target, 'v': round(float(r['value']), 3)})
+                        break
+            if bt:
+                entry['backtest'] = bt
         if entry.get('forecast') or entry.get('severity'):
             out[usgs_id] = entry
     return out
