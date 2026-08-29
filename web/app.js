@@ -58,9 +58,13 @@ async function main() {
     if (SELECTED_P && !document.getElementById('compare').hidden) renderCompare(SELECTED_P);
   });
 
-  // Auto-open the marquee gauge so the panel isn't empty on load.
+  // Auto-open the marquee gauge so the panel isn't empty on load, with the
+  // model-comparison drawer up front — it's the headline feature.
   const potomac = data.predictions.find(p => p.id === '01646500') || data.predictions[0];
-  if (potomac) select(potomac);
+  if (potomac) {
+    select(potomac);
+    openCompare(potomac);
+  }
 }
 
 /* ---- risk classification ------------------------------------------------ */
