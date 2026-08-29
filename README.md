@@ -17,11 +17,13 @@ The repo ships with a working deployment for the gauges around Washington, DC.
 
 ## The map
 
-`web/` is a static map UI, styled after Flood Hub but driven by the per-site models. No build step, no backend: one HTML file, one JS file, Leaflet, and the `preds.json` the model writes.
+`web/` is a static map UI driven by the per-site models. No build step, no backend: one HTML file, one JS file, Leaflet, and the `preds.json` the model writes.
 
-![OpenFloodHub DC map](docs/screenshot.png)
+![OpenFloodHub demo — select the Potomac gauge, open the model comparison](assets/demo.gif)
 
-Click a gauge to open its panel. The chart shows recent observed discharge (solid line), the local CNN's 12-hour forecast (dashed), and NOAA's National Water Model for comparison (dotted). Each gauge has its own Warning/Danger/Extreme thresholds, derived from that gauge's flood history, so the risk coloring means something different for the Potomac than it does for a 4-square-mile urban creek.
+Click a gauge to open its panel: recent observed discharge (solid), the local CNN's 12-hour forecast (dashed), NOAA's National Water Model (dotted), and Google Flood Hub (dash-dot) on one chart, with the gauge's HYBAS contributing area outlined on the map. Each gauge has its own Warning/Danger/Extreme thresholds, derived from that gauge's flood history, so the risk coloring means something different for the Potomac than it does for a 4-square-mile urban creek. "Compare model predictions" opens a bottom panel replaying the past week of CNN and Google forecasts against what the river actually did.
+
+(The GIF is generated — rerun `scripts/make_demo_gif.py` after UI changes; it needs `playwright` + `pillow` in the venv.)
 
 To run it locally after generating `preds.json` (see below):
 
