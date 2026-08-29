@@ -11,7 +11,7 @@ That tradeoff is the whole point of the project:
 
 So this is not a drop-in replacement for everything Flood Hub does. It is a different bet: that for a known set of gauges you care about, a specialized local model is simpler to run, cheaper to retrain, and easier to reason about than one big model trying to cover the planet.
 
-The repo ships with a working deployment for the gauges around Washington, DC.
+The repo ships with a working deployment for the gauges around Washington, DC — the live map is at **[abhiramm7.github.io/openfloodhub](https://abhiramm7.github.io/openfloodhub/)**, refreshed every two hours.
 
 Version 0.2 brings the comparison full circle: the map is now integrated with the [Google Flood Forecasting API](https://developers.google.com/flood-forecasting), the model behind Flood Hub itself, so you can see Google's predictions for these same gauges next to the local CNN's and check which of the two tracked the river better over the past week.
 
