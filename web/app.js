@@ -465,7 +465,14 @@ function chartSVG(p) {
 
 function cap(s) { return s[0].toUpperCase() + s.slice(1); }
 function fmt(v) { return v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(2); }
-function fmtAxis(v) { return v >= 1000 ? (v / 1000).toFixed(1) + 'k' : Math.round(v); }
+function fmtAxis(v) {
+  // Adapt precision to magnitude — the small urban creeks sit at 0.01-0.3
+  // m³/s, where rounding to integers turns every gridline label into "0".
+  if (v >= 1000) return (v / 1000).toFixed(1) + 'k';
+  if (v >= 10) return String(Math.round(v));
+  if (v >= 1) return String(Number(v.toFixed(1)));
+  return String(Number(v.toFixed(v >= 0.1 ? 2 : 3)));
+}
 function fmtTick(t) { return new Date(t).toLocaleString([], { month: 'numeric', day: 'numeric', hour: 'numeric' }); }
 function fmtTime(iso) { return new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
 function fmtAge(iso) {
