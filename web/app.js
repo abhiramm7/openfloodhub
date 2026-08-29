@@ -9,7 +9,8 @@ const RISK = {
   extreme: getCSS('--extreme'),
   nodata:  getCSS('--nodata'),
 };
-const FLOW = getCSS('--flow');
+const FLOW = getCSS('--flow');     // observed flow (ink black)
+const ACCENT = getCSS('--accent'); // CNN forecast
 
 function getCSS(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
 
@@ -84,7 +85,7 @@ function riskOf(p) {
 }
 function markerStyle(r, selected) {
   return {
-    radius: selected ? 10 : 7, color: '#fff', weight: 2,
+    radius: selected ? 10 : 7, color: '#000', weight: 2,
     fillColor: r.color, fillOpacity: 1,
   };
 }
@@ -158,6 +159,9 @@ function renderPanel(p) {
 
     <div class="section-title compare-toggle" id="cmpToggle">
       Compare model predictions — last 7 days <span style="float:right">▸</span></div>
+    <div class="chart-note" style="margin:0 0 6px">Opens a chart panel across the
+      bottom of the map. Skill over the past week:</div>
+    ${skillBlock(p)}
 
     <div class="section-title">Now and forecast</div>
     <div class="info-grid">
@@ -264,7 +268,7 @@ function renderCompare(p) {
       (dashed) and Google Flood Hub's next-day forecast (dash-dot points) vs observed
       flow (solid), m³/s. Bars from the top are observed daily rainfall (MRMS, mm).</div>
     ${compareSVG(obs, cnn, goog, rain, W, 220)}
-    ${compareStats(obs, cnn, goog)}`;
+    ${compareStats(p)}`;
 }
 
 function compareSVG(obs, cnn, goog, rain, W, H) {
@@ -304,7 +308,7 @@ function compareSVG(obs, cnn, goog, rain, W, H) {
   }
 
   if (obs.length > 1) svg += `<path d="${line(obs)}" fill="none" stroke="${FLOW}" stroke-width="2"/>`;
-  if (cnn.length > 1) svg += `<path d="${line(cnn)}" fill="none" stroke="${FLOW}" stroke-width="1.4" stroke-dasharray="4 3" opacity="0.85"/>`;
+  if (cnn.length > 1) svg += `<path d="${line(cnn)}" fill="none" stroke="${ACCENT}" stroke-width="1.4" stroke-dasharray="4 3" opacity="0.9"/>`;
   if (goog.length > 1) svg += `<path d="${line(goog)}" fill="none" stroke="#00897b" stroke-width="1.4" stroke-dasharray="6 3 1.5 3" opacity="0.9"/>`;
   for (const d of goog) svg += `<circle cx="${x(d.t)}" cy="${y(d.v)}" r="2.6" fill="#00897b"/>`;
   for (let i = 0; i <= 4; i++) {
@@ -316,12 +320,13 @@ function compareSVG(obs, cnn, goog, rain, W, H) {
   return svg + '</svg>';
 }
 
-function compareStats(obs, cnn, goog) {
-  if (!obs.length) return `<div class="chart-note">No USGS observations to score against.</div>`;
+function compareMAE(p) {
+  // CNN 12h-ahead is hourly, scored against the observation at the same hour;
+  // Google next-day is daily, scored against that day's observed mean.
+  const { obs, cnn, goog } = compareData(p);
+  if (!obs.length) return { hours: 0, days: 0, cnnMae: null, googMae: null };
   const obsAt = new Map(obs.map(d => [d.t, d.v]));
-  // CNN 12h-ahead: hourly, scored against the observation at the same hour.
   const cnnErr = cnn.filter(d => obsAt.has(d.t)).map(d => Math.abs(d.v - obsAt.get(d.t)));
-  // Google next-day: daily value, scored against that day's observed mean.
   const dayMean = new Map();
   for (const d of obs) {
     const day = new Date(d.t).toISOString().slice(0, 10);
@@ -334,11 +339,29 @@ function compareStats(obs, cnn, goog) {
     return m ? Math.abs(d.v - m.reduce((a, b) => a + b) / m.length) : null;
   }).filter(e => e != null);
   const mae = a => a.length ? (a.reduce((x, y) => x + y) / a.length) : null;
-  const f = v => v == null ? '—' : (v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(2));
-  return `<div class="legend-row">
-    <div class="item"><span class="lbl">CNN 12h MAE</span><div class="val">${f(mae(cnnErr))} m³/s</div></div>
-    <div class="item"><span class="lbl">Google 1d MAE</span><div class="val">${f(mae(googErr))} m³/s</div></div>
-    <div class="item"><span class="lbl">Hours scored</span><div class="val">${cnnErr.length}</div></div>
+  return { hours: cnnErr.length, days: googErr.length,
+           cnnMae: mae(cnnErr), googMae: mae(googErr) };
+}
+
+function fmtMae(v) { return v == null ? '—' : (v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(2)); }
+
+function skillBlock(p) {
+  const s = compareMAE(p);
+  if (!s.hours) return `<div class="chart-note">No observations this week to score the models against.</div>`;
+  return `<table class="kv">
+    <tr><td>CNN 12h MAE</td><td>${fmtMae(s.cnnMae)} m³/s</td></tr>
+    <tr><td>Google 1d MAE</td><td>${fmtMae(s.googMae)} m³/s</td></tr>
+    <tr><td>Scored over</td><td>${s.hours} h / ${s.days} d</td></tr>
+  </table>`;
+}
+
+function compareStats(p) {
+  const s = compareMAE(p);
+  if (!s.hours) return `<div class="chart-note">No USGS observations to score against.</div>`;
+  return `<div class="legend-row" style="max-width:560px">
+    <div class="item"><span class="lbl">CNN 12h MAE</span><div class="val">${fmtMae(s.cnnMae)} m³/s</div></div>
+    <div class="item"><span class="lbl">Google 1d MAE</span><div class="val">${fmtMae(s.googMae)} m³/s</div></div>
+    <div class="item"><span class="lbl">Scored over</span><div class="val">${s.hours} h / ${s.days} d</div></div>
   </div>`;
 }
 
@@ -422,9 +445,9 @@ function chartSVG(p) {
   // Google Flood Hub overlay (dash-dot)
   if (goog.length > 1) svg += `<path d="${line(goog)}" fill="none" stroke="#00897b" stroke-width="1.5" stroke-dasharray="6 3 1.5 3" opacity="0.9"/>`;
 
-  // observed (solid) + forecast (dashed)
+  // observed (solid black) + CNN forecast (dashed accent)
   if (obs.length > 1) svg += `<path d="${line(obs)}" fill="none" stroke="${FLOW}" stroke-width="2.2"/>`;
-  if (join.length > 1) svg += `<path d="${line(join)}" fill="none" stroke="${FLOW}" stroke-width="2.2" stroke-dasharray="4 3"/>`;
+  if (join.length > 1) svg += `<path d="${line(join)}" fill="none" stroke="${ACCENT}" stroke-width="2.2" stroke-dasharray="4 3"/>`;
 
   // "Now" marker
   svg += `<line x1="${nowX}" y1="${M.t}" x2="${nowX}" y2="${M.t + ph}" stroke="#9aa0a6" stroke-width="1" stroke-dasharray="3 3"/>`;

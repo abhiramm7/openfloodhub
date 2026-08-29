@@ -6,101 +6,133 @@
 <title>OpenFloodHub</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
+  /* Brutalist skin, matches randomstorms.net */
   :root {
+    color-scheme: light;
     --normal:  #2e9e5b;
     --warning: #f5a623;
     --danger:  #e8453c;
     --extreme: #8b1a13;
     --nodata:  #9aa0a6;
-    --flow:    #1a73e8;
-    --ink:     #202124;
-    --muted:   #5f6368;
-    --line:    #e3e6ea;
+    --flow:    #000000;   /* observed flow */
+    --accent:  #ff3300;   /* CNN forecast + interaction accent */
+    --ink:     #000000;
+    --muted:   #666666;
+    --border:  #000000;
+    --line:    #e0e0e0;   /* gridlines + subtle separators */
+    --surface: #ffffff;
     --panel-w: 384px;
+    --font-main: "Space Mono", "SF Mono", ui-monospace, Menlo, monospace;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; font-family: "Google Sans", Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--ink); }
+  html, body { margin: 0; height: 100%; font: 13px/1.6 var(--font-main); color: var(--ink);
+               background: var(--surface); -webkit-font-smoothing: antialiased; }
+  a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+  a:hover { color: var(--accent); }
   #map { position: absolute; inset: 56px 0 0 0; z-index: 1; }
 
   /* Top bar */
   #topbar {
     position: absolute; top: 0; left: 0; right: 0; height: 56px; z-index: 1000;
-    display: flex; align-items: center; gap: 14px; padding: 0 20px;
-    background: #fff; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 14px; padding: 0 16px;
+    background: var(--surface); border-bottom: 3px solid var(--border);
   }
-  #topbar .logo { display: flex; align-items: center; gap: 9px; font-size: 20px; font-weight: 500; }
-  #topbar .tag { color: var(--muted); font-size: 13px; padding-left: 14px; border-left: 1px solid var(--line); }
+  #topbar .logo { font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+  #topbar .tag { color: var(--muted); font-size: 11px; letter-spacing: 0.04em; }
   #topbar .spacer { flex: 1; }
-  #topbar .updated { color: var(--muted); font-size: 12px; }
+  #topbar .updated { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+  #topbar .links { font-size: 11px; display: flex; gap: 14px; text-transform: uppercase;
+                   letter-spacing: 0.05em; font-weight: 700; }
 
-  /* Detail panel */
+  /* Detail panel (left column) */
   #panel {
     position: absolute; top: 56px; left: 0; bottom: 0; width: var(--panel-w); z-index: 1000;
-    background: #fff; border-right: 1px solid var(--line); overflow-y: auto;
-    transform: translateX(-100%); transition: transform .22s ease; padding: 20px;
+    background: var(--surface); border-right: 2px solid var(--border); overflow-y: auto;
+    transform: translateX(-100%); transition: transform .22s ease; padding: 16px;
   }
-  #panel.open { transform: translateX(0); box-shadow: 2px 0 14px rgba(0,0,0,.08); }
-  #panel h2 { font-size: 18px; font-weight: 500; margin: 0 0 2px; display: flex; align-items: center; gap: 8px; }
-  #panel .sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
-  #panel .close { position: absolute; top: 16px; right: 16px; cursor: pointer; color: var(--muted); font-size: 22px; line-height: 1; border: none; background: none; }
-  .axis-label { font-size: 11px; fill: var(--muted); }
-  .thr-label  { font-size: 10px; font-weight: 600; }
+  #panel.open { transform: translateX(0); }
+  #panel h2 { font-size: 14px; font-weight: 700; margin: 0 0 2px; text-transform: uppercase; letter-spacing: 0.06em; }
+  #panel .sub { color: var(--muted); font-size: 11px; margin-bottom: 14px; }
+  #panel .close { position: absolute; top: 12px; right: 12px; cursor: pointer; color: var(--ink);
+    font-size: 18px; line-height: 1; border: 2px solid var(--border); background: var(--surface);
+    width: 26px; height: 26px; font-family: inherit; }
+  #panel .close:hover { color: var(--accent); border-color: var(--accent); }
+  .axis-label { font-size: 10px; fill: var(--muted); font-family: var(--font-main); }
+  .thr-label  { font-size: 9.5px; font-weight: 700; font-family: var(--font-main); }
 
-  .legend-row { display: flex; justify-content: space-between; gap: 8px; margin-top: 14px; }
-  .legend-row .item { flex: 1; text-align: center; }
-  .legend-row .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
-  .legend-row .lbl { font-size: 11px; color: var(--muted); }
-  .legend-row .val { font-size: 13px; font-weight: 600; margin-top: 2px; }
+  .legend-row { display: flex; justify-content: space-between; gap: 8px; margin-top: 12px; }
+  .legend-row .item { flex: 1; text-align: center; border: 2px solid var(--border); padding: 6px 4px; }
+  .legend-row .dot { display: inline-block; width: 9px; height: 9px; margin-right: 5px; vertical-align: middle; }
+  .legend-row .lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; }
+  .legend-row .val { font-size: 12.5px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
 
-  .section-title { font-size: 13px; font-weight: 600; margin: 22px 0 10px; padding-top: 16px; border-top: 1px solid var(--line); }
-  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
-  .info-grid .k { font-size: 11px; color: var(--muted); }
-  .info-grid .v { font-size: 13px; font-weight: 500; margin-top: 1px; }
+  .section-title { font-size: 11px; font-weight: 700; margin: 20px 0 8px; padding-top: 14px;
+    border-top: 1px solid var(--line); text-transform: uppercase; letter-spacing: 0.06em; }
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+  .info-grid .k { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  .info-grid .v { font-size: 12.5px; font-weight: 700; margin-top: 1px; font-variant-numeric: tabular-nums; }
 
-  .status-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #fff; }
+  .status-pill { display: inline-block; padding: 2px 9px; font-size: 11px; font-weight: 700; color: #fff;
+    text-transform: uppercase; letter-spacing: 0.04em; border: 2px solid var(--border); }
 
-  /* Map legend card — top right, clear of the detail panel */
+  table.kv { width: 100%; border-collapse: collapse; font-size: 11.5px; margin-top: 4px; }
+  table.kv td { padding: 3px 0; border-bottom: 1px solid var(--line); }
+  table.kv tr:last-child td { border-bottom: none; }
+  table.kv td:first-child { color: var(--muted); text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.03em; }
+  table.kv td:last-child { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+
+  /* Map legend card — top right */
   #riskcard {
-    position: absolute; right: 16px; top: 72px; z-index: 1000; background: #fff;
-    border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; box-shadow: 0 2px 10px rgba(0,0,0,.08);
-    font-size: 12px; min-width: 168px;
+    position: absolute; right: 16px; top: 72px; z-index: 1000; background: var(--surface);
+    border: 2px solid var(--border); padding: 10px 12px; box-shadow: 3px 3px 0 var(--border);
+    font-size: 11px; min-width: 178px;
   }
-  #riskcard .title { font-weight: 600; margin-bottom: 8px; font-size: 12px; }
-  #riskcard .row { display: flex; align-items: center; gap: 8px; margin: 5px 0; color: var(--muted); }
-  #riskcard .row .dot { width: 10px; height: 10px; border-radius: 50%; }
-  #riskcard .sep { border-top: 1px solid var(--line); margin: 9px 0 7px; }
+  #riskcard .title { font-weight: 700; margin-bottom: 7px; font-size: 10.5px;
+    text-transform: uppercase; letter-spacing: 0.06em; }
+  #riskcard .row { display: flex; align-items: center; gap: 8px; margin: 4px 0; color: var(--muted); }
+  #riskcard .row .dot { width: 10px; height: 10px; }
+  #riskcard .sep { border-top: 1px solid var(--line); margin: 8px 0 6px; }
+  .leaflet-container { background: #eef1f4; font-family: var(--font-main); }
+  .leaflet-tooltip { border-radius: 0; border: 2px solid var(--border);
+    box-shadow: 3px 3px 0 var(--border); font-family: var(--font-main); font-size: 11.5px; }
+  .chart-note { font-size: 10.5px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
   .compare-toggle { cursor: pointer; user-select: none; }
-  .compare-toggle:hover { color: var(--flow); }
+  .compare-toggle:hover { color: var(--accent); }
 
   /* Model-comparison drawer along the bottom, beside the side column */
   #compare {
     position: absolute; left: var(--panel-w); right: 0; bottom: 0; z-index: 1200;
-    background: #fff; border-top: 1px solid var(--line); border-left: 1px solid var(--line);
-    box-shadow: 0 -4px 18px rgba(0,0,0,.12); padding: 14px 20px 10px;
+    background: var(--surface); border-top: 3px solid var(--border); border-left: 2px solid var(--border);
+    padding: 12px 18px 8px;
   }
-  #compare .cmp-title { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
-  #compare .close { position: absolute; top: 10px; right: 14px; cursor: pointer;
-    color: var(--muted); font-size: 22px; line-height: 1; border: none; background: none; }
+  #compare .cmp-title { font-size: 12px; font-weight: 700; margin-bottom: 2px;
+    text-transform: uppercase; letter-spacing: 0.05em; }
+  #compare .close { position: absolute; top: 10px; right: 12px; cursor: pointer; color: var(--ink);
+    font-size: 18px; line-height: 1; border: 2px solid var(--border); background: var(--surface);
+    width: 26px; height: 26px; font-family: inherit; }
+  #compare .close:hover { color: var(--accent); border-color: var(--accent); }
 
   /* Data sources & credits box at the bottom of the detail panel */
   .sources-box {
-    margin-top: 22px; border: 1px solid var(--line); border-radius: 10px;
-    padding: 12px 14px; font-size: 12px; color: var(--muted);
+    margin-top: 20px; border: 2px solid var(--border); padding: 10px 12px;
+    font-size: 10.5px; color: var(--muted); box-shadow: 3px 3px 0 var(--border);
   }
-  .sources-box .title { font-weight: 600; color: var(--ink); margin-bottom: 7px; }
-  .sources-box .row { margin: 4px 0; }
-  .sources-box a { color: var(--flow); text-decoration: none; }
-  .sources-box a:hover { text-decoration: underline; }
-  .leaflet-container { background: #eef1f4; }
-  .chart-note { font-size: 11px; color: var(--muted); margin-top: 8px; }
+  .sources-box .title { font-weight: 700; color: var(--ink); margin-bottom: 6px; font-size: 10.5px;
+    text-transform: uppercase; letter-spacing: 0.06em; }
+  .sources-box .row { margin: 3px 0; line-height: 1.55; }
 </style>
 </head>
 <body>
   <div id="topbar">
     <div class="logo">OpenFloodHub</div>
+    <span class="tag">per-gauge CNN flood forecasts // Washington DC</span>
     <div class="spacer"></div>
     <div class="updated" id="updated"></div>
+    <span class="links">
+      <a href="https://github.com/abhiramm7/openfloodhub" target="_blank" rel="noopener">code</a>
+    </span>
   </div>
 
   <div id="map"></div>
@@ -119,8 +151,8 @@
     <div class="row"><span class="dot" style="background:var(--nodata)"></span> No data / offline</div>
     <div class="sep"></div>
     <div class="title">Chart lines</div>
-    <div class="row"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#1a73e8" stroke-width="2.2"/></svg> Observed flow</div>
-    <div class="row"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#1a73e8" stroke-width="2.2" stroke-dasharray="4 3"/></svg> CNN forecast</div>
+    <div class="row"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#000" stroke-width="2.2"/></svg> Observed flow</div>
+    <div class="row"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#ff3300" stroke-width="2.2" stroke-dasharray="4 3"/></svg> CNN forecast</div>
     <div class="row"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#7b61ff" stroke-width="1.5" stroke-dasharray="1.5 2.5"/></svg> NOAA NWM</div>
     <div class="row"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#00897b" stroke-width="1.5" stroke-dasharray="6 3 1.5 3"/></svg> Google Flood Hub</div>
   </div>
@@ -133,6 +165,6 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>
