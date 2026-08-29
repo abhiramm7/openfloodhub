@@ -13,17 +13,19 @@ So this is not a drop-in replacement for everything Flood Hub does. It is a diff
 
 The repo ships with a working deployment for the gauges around Washington, DC.
 
+Version 0.2 brings the comparison full circle: the map is now integrated with the [Google Flood Forecasting API](https://developers.google.com/flood-forecasting), the model behind Flood Hub itself, so you can see Google's predictions for these same gauges next to the local CNN's and check which of the two tracked the river better over the past week.
+
 > **Caveat.** This is a research prototype. Do not use it to decide whether to drive through floodwater. The official sources for that are [NWS AHPS](https://water.weather.gov/ahps/) and [NOAA NWPS](https://water.noaa.gov/).
 
 ## The map
 
-`web/` is a static map UI driven by the per-site models. No build step, no backend: one HTML file, one JS file, Leaflet, and the `preds.json` the model writes.
+`web/` is a static map with no build step and no backend: one HTML file, one JS file, Leaflet, and the `preds.json` the pipeline writes.
 
-![OpenFloodHub demo — select the Potomac gauge, open the model comparison](assets/demo.gif)
+![OpenFloodHub demo: select the Potomac gauge, open the model comparison](assets/demo.gif)
 
-Click a gauge to open its panel: recent observed discharge (solid), the local CNN's 12-hour forecast (dashed), NOAA's National Water Model (dotted), and Google Flood Hub (dash-dot) on one chart, with the gauge's HYBAS contributing area outlined on the map. Each gauge has its own Warning/Danger/Extreme thresholds, derived from that gauge's flood history, so the risk coloring means something different for the Potomac than it does for a 4-square-mile urban creek. "Compare model predictions" opens a bottom panel replaying the past week of CNN and Google forecasts against what the river actually did.
+Click a gauge and the panel shows the last day of observed discharge with the CNN's 12-hour forecast, plus NOAA's National Water Model and Google's forecast for comparison. The catchment that drains to the gauge is outlined on the map. Thresholds are per gauge, derived from each river's own flood history, so a green Potomac and a green Watts Branch mean very different absolute flows. The compare view replays the past week of CNN and Google predictions against what the river actually did and scores both.
 
-(The GIF is generated — rerun `scripts/make_demo_gif.py` after UI changes; it needs `playwright` + `pillow` in the venv.)
+The GIF above comes from `scripts/make_demo_gif.py`; rerun it after UI changes (it needs `playwright` and `pillow` in the venv).
 
 To run it locally after generating `preds.json` (see below):
 
@@ -34,7 +36,7 @@ cd web && python3 -m http.server 8772      # open http://localhost:8772
 
 ## The model
 
-`flood_warning/model.py`. Two-branch 1D CNN: a 4-channel past stream (flow, precip, temperature, and soil moisture for the last 24 hours) and a 1-channel future stream (forecast precip for the next 12 hours). Each goes through a few Conv1D layers, gets flattened, concatenated, and projected to a 12-step output. The 4th past channel is ERA5-Land surface soil moisture — an antecedent-wetness proxy that tells the model how saturated the basin is before a storm.
+`flood_warning/model.py`. Two-branch 1D CNN: a 4-channel past stream (flow, precip, temperature, and soil moisture for the last 24 hours) and a 1-channel future stream (forecast precip for the next 12 hours). Each goes through a few Conv1D layers, gets flattened, concatenated, and projected to a 12-step output. The 4th past channel is ERA5-Land surface soil moisture, a proxy for how saturated the basin already is when a storm arrives.
 
 ```
 past   (4 ch x 24h)  ->  Conv1D x 3  ->  flatten
@@ -123,13 +125,23 @@ done                                              # ~90s per gauge on CPU
 
 NWM streamflow and NWS QPF come from unauthenticated NOAA APIs ([NWPS](https://api.water.noaa.gov/nwps/v1/docs/), [api.weather.gov](https://www.weather.gov/documentation/services-web-api)); MRMS observed precip is pulled per-point from the [Iowa Environmental Mesonet](https://mesonet.agron.iastate.edu/) IEMRE service.
 
-The Google overlay uses the [Flood Forecasting API](https://developers.google.com/flood-forecasting) (the engine behind [Flood Hub](https://g.co/floodhub)) and needs a `GOOGLE_FLOOD_API_KEY` in `.env.local` (Actions secret in CI); without one it's silently skipped. Google's US gauges are HYBAS virtual points at basin outlets, so `google_gauges.json` maps each USGS site to its basin-matched Google gauge — 5 of the 7 sites have one (NW Anacostia and Watts Branch drain basins too small for HYBAS coverage). `google_flood` also carries the past week of Google's next-day forecasts, which the gauge panel's "Compare model predictions" section scores against observed flow alongside the CNN's own 12h-ahead backtest.
+The Google overlay comes from the [Flood Forecasting API](https://developers.google.com/flood-forecasting), the same model that powers [Flood Hub](https://g.co/floodhub). It needs a `GOOGLE_FLOOD_API_KEY` in `.env.local` (an Actions secret in CI) and is skipped quietly when the key is missing. Google's US gauges are virtual points at HYBAS basin outlets rather than USGS station locations, so `google_gauges.json` maps each site to its basin-matched Google gauge. Five of the seven sites have one; NW Anacostia and Watts Branch drain basins too small for HYBAS to model. The overlay also keeps the past week of Google's next-day forecasts, which the compare view scores against observed flow next to the CNN's own backtest.
 
-Selecting a gauge also outlines its HYBAS contributing area (`web/basins.json`, ~12 KB) — upstream unions of [HydroBASINS](https://www.hydrosheds.org/products/hydrobasins) level-12 catchments, built offline once; rebuild it if `google_gauges.json` changes.
+Selecting a gauge outlines its contributing area from `web/basins.json` (about 12 KB), built once offline by dissolving upstream [HydroBASINS](https://www.hydrosheds.org/products/hydrobasins) level-12 catchments. Rebuild it if `google_gauges.json` changes.
 
 ## Adding a gauge
 
 Add a row to `flood_warning/sites.py` with `id`, `name`, `lat`, `lon`, `drainage_sqmi`, `kind`. Then fetch, train, and compute its thresholds.
+
+## How to use this
+
+The hosted map is at <https://abhiramm7.github.io/openfloodhub/> and refreshes every two hours.
+
+1. Marker color is the 12-hour outlook for that gauge. Green means below the warning threshold; gray means the gauge is offline or has no threshold. Rock Creek has been gray since launch because USGS stopped serving its data, though Google still forecasts its basin.
+2. Click a marker. The panel shows current flow, the 12-hour forecast, that gauge's own thresholds, and the catchment that drains to it outlined on the map.
+3. "Compare model predictions" opens a week of hindsight along the bottom: what the CNN and Google each predicted, drawn over what actually happened, with the error of each. The rainfall bars along the top of that chart explain most of the disagreements.
+
+To run your own copy, fork the repo, add `GOOGLE_FLOOD_API_KEY` as an Actions secret (`USGS_API_KEY` is optional), enable GitHub Pages, and the forecast workflow handles the rest on a 2-hour schedule. To point it at different rivers, see "Adding a gauge" above.
 
 ## License
 

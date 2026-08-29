@@ -27,7 +27,7 @@ from pathlib import Path
 import pandas as pd
 
 from .fetch import fetch_usgs_hourly
-from .sites import SITES, BY_ID
+from .sites import SITES
 
 THRESH_PATH = Path(__file__).resolve().parent / 'thresholds.json'
 MIN_DAYS = 365

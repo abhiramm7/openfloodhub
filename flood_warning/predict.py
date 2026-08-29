@@ -5,8 +5,6 @@ forecast hourly data.
 from __future__ import annotations
 
 import json
-import time
-import urllib.request
 from pathlib import Path
 
 import numpy as np
@@ -16,53 +14,10 @@ import torch
 from .dataset import PAST_STEPS, FUTURE_STEPS, Scaler
 from .model import FloodCNN
 from .sites import SITES, BY_ID
-from .fetch import _http_get, USGS_API_KEY, CFS_TO_M3S
 
 REPO = Path(__file__).resolve().parents[1]
 CKPT_DIR = Path(__file__).resolve().parent / 'checkpoints'
 OUT_PATH = REPO / 'outputs' / 'dmv-cnn-12h' / 'preds.json'
-
-
-def fetch_recent_usgs(gauge_id: str, hours: int = 30) -> pd.Series:
-    """Last N hours of USGS observed flow (15-min cadence -> hourly mean, m³/s)."""
-    end = pd.Timestamp.utcnow().tz_localize(None)
-    start = end - pd.Timedelta(hours=hours + 6)
-    url = ('https://waterservices.usgs.gov/nwis/iv/?sites='
-           + gauge_id + '&parameterCd=00060'
-           + f'&startDT={start.strftime("%Y-%m-%dT%H:%MZ")}'
-           + f'&endDT={end.strftime("%Y-%m-%dT%H:%MZ")}'
-           + '&format=json')
-    headers = {'X-Api-Key': USGS_API_KEY} if USGS_API_KEY else {}
-    payload = json.loads(_http_get(url, headers))
-    rows = []
-    for ts in payload.get('value', {}).get('timeSeries', []):
-        for v in ts.get('values', [{}])[0].get('value', []):
-            try:
-                cfs = float(v['value'])
-                if cfs < 0:
-                    continue
-                rows.append((v['dateTime'], cfs * CFS_TO_M3S))
-            except (ValueError, KeyError, TypeError):
-                continue
-    if not rows:
-        return pd.Series(dtype=float)
-    df = pd.DataFrame(rows, columns=['t', 'flow_m3s'])
-    df['t'] = pd.to_datetime(df['t'], utc=True).dt.tz_convert(None)
-    return df.set_index('t').sort_index()['flow_m3s'].resample('h').mean()
-
-
-def fetch_openmeteo_window(lat: float, lon: float) -> pd.DataFrame:
-    """Hourly precip + temp covering last ~30h past + next 16h forecast.
-    Open-Meteo Forecast API has `past_days` and `forecast_days` params.
-    """
-    url = ('https://api.open-meteo.com/v1/forecast?'
-           f'latitude={lat:.4f}&longitude={lon:.4f}'
-           f'&hourly=precipitation,temperature_2m,surface_pressure'
-           f'&past_days=2&forecast_days=2&timezone=GMT')
-    payload = json.loads(_http_get(url))
-    df = pd.DataFrame(payload['hourly']).rename(columns={'time': 't'})
-    df['t'] = pd.to_datetime(df['t'])
-    return df.set_index('t').sort_index()
 
 
 def predict_gauge(gauge_id: str) -> dict | None:

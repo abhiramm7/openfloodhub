@@ -2,7 +2,6 @@
 flaky 1D conv kernels in 2.5)."""
 from __future__ import annotations
 
-import json
 import time
 from pathlib import Path
 

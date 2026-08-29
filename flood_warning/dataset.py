@@ -14,14 +14,12 @@ Normalization stats are computed on the training split only.
 """
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 
 from .fetch import DATA_DIR
 

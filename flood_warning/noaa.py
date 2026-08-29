@@ -170,12 +170,6 @@ def fetch_nwm_streamflow(reach_id: str) -> dict:
     }
 
 
-def fetch_nwm_short_range(reach_id: str) -> list[dict]:
-    """NWM short-range streamflow forecast — next ~18 hours hourly, m³/s.
-    Kept for backwards compatibility; prefer fetch_nwm_streamflow()."""
-    return fetch_nwm_streamflow(reach_id)['short']
-
-
 # --------------------------------------------------------------------------
 # NWS quantitative precipitation forecast (QPF) — forecast rainfall, mm
 # --------------------------------------------------------------------------
