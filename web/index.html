@@ -73,10 +73,10 @@
   .compare-toggle { cursor: pointer; user-select: none; }
   .compare-toggle:hover { color: var(--flow); }
 
-  /* Full-width model-comparison drawer along the bottom */
+  /* Model-comparison drawer along the bottom, beside the side column */
   #compare {
-    position: absolute; left: 0; right: 0; bottom: 0; z-index: 1200;
-    background: #fff; border-top: 1px solid var(--line);
+    position: absolute; left: var(--panel-w); right: 0; bottom: 0; z-index: 1200;
+    background: #fff; border-top: 1px solid var(--line); border-left: 1px solid var(--line);
     box-shadow: 0 -4px 18px rgba(0,0,0,.12); padding: 14px 20px 10px;
   }
   #compare .cmp-title { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
@@ -133,6 +133,6 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

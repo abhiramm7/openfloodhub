@@ -156,6 +156,9 @@ function renderPanel(p) {
       <div class="item"><span class="dot" style="background:var(--extreme)"></span><span class="lbl">Extreme</span><div class="val">${fmt(th.extreme)}</div></div>
     </div>` : `<div class="chart-note">No flood thresholds for this gauge.</div>`}
 
+    <div class="section-title compare-toggle" id="cmpToggle">
+      Compare model predictions — last 7 days <span style="float:right">▸</span></div>
+
     <div class="section-title">Now and forecast</div>
     <div class="info-grid">
       <div><div class="k">Current flow</div><div class="v">${cur != null ? fmt(cur) + ' m³/s' : '—'}</div></div>
@@ -177,9 +180,6 @@ function renderPanel(p) {
       ${googleRow(p)}
       ${hybasRow(p)}
     </div>
-
-    <div class="section-title compare-toggle" id="cmpToggle">
-      Compare model predictions — last 7 days <span style="float:right">▸</span></div>
 
     ${sourcesBox()}
   `;
@@ -251,17 +251,23 @@ function renderCompare(p) {
     body.innerHTML = `<div class="chart-note">No stored predictions for this gauge yet.</div>`;
     return;
   }
+  // Daily observed rainfall (MRMS) drawn as bars hanging from the chart top.
+  const rain = (p.noaa_mrms_precip || []).map(e => ({
+    t0: +new Date(e.date + 'T00:00:00Z'),
+    t1: +new Date(e.date + 'T00:00:00Z') + 86400e3,
+    mm: e.precip_mm,
+  }));
   const W = Math.max(360, body.clientWidth || (window.innerWidth - 40));
   body.innerHTML = `
     <div class="chart-note" style="margin:2px 0 8px">Each model's past predictions
       replayed against what the river actually did: the CNN's 12h-ahead forecast
       (dashed) and Google Flood Hub's next-day forecast (dash-dot points) vs observed
-      flow (solid), m³/s.</div>
-    ${compareSVG(obs, cnn, goog, W, 220)}
+      flow (solid), m³/s. Bars from the top are observed daily rainfall (MRMS, mm).</div>
+    ${compareSVG(obs, cnn, goog, rain, W, 220)}
     ${compareStats(obs, cnn, goog)}`;
 }
 
-function compareSVG(obs, cnn, goog, W, H) {
+function compareSVG(obs, cnn, goog, rain, W, H) {
   const M = { t: 12, r: 14, b: 20, l: 44 };
   const pw = W - M.l - M.r, ph = H - M.t - M.b;
   const all = [...obs, ...cnn, ...goog];
@@ -281,6 +287,22 @@ function compareSVG(obs, cnn, goog, W, H) {
     svg += `<line x1="${M.l}" y1="${yy}" x2="${W - M.r}" y2="${yy}" stroke="var(--line)" stroke-width="1"/>`;
     svg += `<text class="axis-label" x="${M.l - 6}" y="${yy + 3}" text-anchor="end">${fmtAxis(v)}</text>`;
   }
+  // Rainfall hyetograph: daily bars hanging from the top, on their own scale
+  // (max bar = 28% of plot height), clipped to the flow series' time window.
+  const bars = (rain || [])
+    .map(b => ({ ...b, t0: Math.max(b.t0, tMin), t1: Math.min(b.t1, tMax) }))
+    .filter(b => b.t1 > b.t0 && b.mm > 0);
+  const rainMax = bars.length ? Math.max(...bars.map(b => b.mm)) : 0;
+  if (rainMax > 0) {
+    for (const b of bars) {
+      const h = (b.mm / rainMax) * ph * 0.28;
+      svg += `<rect x="${x(b.t0).toFixed(1)}" y="${M.t}" width="${(x(b.t1) - x(b.t0)).toFixed(1)}"`
+           + ` height="${h.toFixed(1)}" fill="#7db4e8" opacity="0.5"/>`;
+    }
+    svg += `<text class="axis-label" x="${W - M.r}" y="${M.t + 9}" text-anchor="end"`
+         + ` fill="#5f83a6">rain, wettest day ${rainMax.toFixed(1)} mm</text>`;
+  }
+
   if (obs.length > 1) svg += `<path d="${line(obs)}" fill="none" stroke="${FLOW}" stroke-width="2"/>`;
   if (cnn.length > 1) svg += `<path d="${line(cnn)}" fill="none" stroke="${FLOW}" stroke-width="1.4" stroke-dasharray="4 3" opacity="0.85"/>`;
   if (goog.length > 1) svg += `<path d="${line(goog)}" fill="none" stroke="#00897b" stroke-width="1.4" stroke-dasharray="6 3 1.5 3" opacity="0.9"/>`;
