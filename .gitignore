@@ -5,6 +5,9 @@
 # Secrets
 .env.local
 .env
+# OS / IDE
+.DS_Store
+.idea/
 # Python
 __pycache__/
 *.py[cod]
