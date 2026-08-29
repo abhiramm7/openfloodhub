@@ -73,6 +73,8 @@ flood_warning/
 ├── thresholds.py       # per-gauge flood thresholds from the record
 ├── thresholds.json     # cached thresholds (committed)
 ├── noaa.py             # NOAA/NWS comparison overlays (NWM, QPF, MRMS)
+├── google_flood.py     # Google Flood Hub comparison overlays
+├── google_gauges.json  # USGS site -> Google (HYBAS) gauge mapping (committed)
 ├── checkpoints/        # pretrained .pt files (one per gauge)
 └── requirements-ci.txt
 
@@ -115,8 +117,11 @@ done                                              # ~90s per gauge on CPU
 | `noaa_nwm_analysis` | NWM analysis-assimilation | Recent best-estimate "observed" streamflow (m³/s) |
 | `noaa_qpf` | NWS gridpoint forecast | Forecast rainfall, hourly (mm) |
 | `noaa_mrms_precip` | MRMS radar QPE (via IEM) | Observed rainfall, daily (mm) |
+| `google_flood` | Google Flood Forecasting API | Daily discharge forecast ~7d out (m³/s), flood severity + trend, 2/5/20-yr thresholds |
 
 NWM streamflow and NWS QPF come from unauthenticated NOAA APIs ([NWPS](https://api.water.noaa.gov/nwps/v1/docs/), [api.weather.gov](https://www.weather.gov/documentation/services-web-api)); MRMS observed precip is pulled per-point from the [Iowa Environmental Mesonet](https://mesonet.agron.iastate.edu/) IEMRE service.
+
+The Google overlay uses the [Flood Forecasting API](https://developers.google.com/flood-forecasting) (the engine behind [Flood Hub](https://g.co/floodhub)) and needs a `GOOGLE_FLOOD_API_KEY` in `.env.local` (Actions secret in CI); without one it's silently skipped. Google's US gauges are HYBAS virtual points at basin outlets, so `google_gauges.json` maps each USGS site to its basin-matched Google gauge — 5 of the 7 sites have one (NW Anacostia and Watts Branch drain basins too small for HYBAS coverage).
 
 ## Adding a gauge
 

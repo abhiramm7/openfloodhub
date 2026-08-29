@@ -39,6 +39,8 @@ jobs:
         env:
           # Optional. USGS NWIS works without a key; add the repo secret to use one.
           USGS_API_KEY: ${{ secrets.USGS_API_KEY }}
+          # Optional. Google Flood Hub overlays are skipped without it.
+          GOOGLE_FLOOD_API_KEY: ${{ secrets.GOOGLE_FLOOD_API_KEY }}
         run: |
           python -m flood_warning.predict
           cp outputs/dmv-cnn-12h/preds.json web/preds.json

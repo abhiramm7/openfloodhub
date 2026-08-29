@@ -113,7 +113,7 @@ function renderPanel(p) {
 
     <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Discharge (m³/s)</div>
     ${chartSVG(p)}
-    <div class="chart-note">Solid line is observed flow, dashed is the CNN forecast, dotted is NOAA's NWM.</div>
+    <div class="chart-note">Solid line is observed flow, dashed is the CNN forecast, dotted is NOAA's NWM${p.google_flood && p.google_flood.forecast ? ', dash-dot is Google Flood Hub' : ''}.</div>
 
     ${th ? `
     <div class="legend-row">
@@ -140,8 +140,24 @@ function renderPanel(p) {
       <div><div class="k">Drainage</div><div class="v">${p.drainage_sqmi.toLocaleString()} mi²</div></div>
       <div><div class="k">Catchment</div><div class="v" style="text-transform:capitalize">${p.kind}</div></div>
       <div><div class="k">Record</div><div class="v">${th ? th.record_years + ' yr' : '—'}</div></div>
+      ${googleRow(p)}
     </div>
   `;
+}
+
+function googleRow(p) {
+  const g = p.google_flood;
+  if (!g || !g.severity) return '';
+  const SEV = {
+    NO_FLOODING:  ['No flooding', 'var(--normal)'],
+    ABOVE_NORMAL: ['Above normal', 'var(--warning)'],
+    SEVERE:       ['Severe', 'var(--danger)'],
+    EXTREME:      ['Extreme', 'var(--extreme)'],
+  };
+  const [label, color] = SEV[g.severity] || ['Unknown', 'var(--nodata)'];
+  const trend = { RISE: ' ↑', FALL: ' ↓', NO_CHANGE: ' →' }[g.trend] || '';
+  return `<div><div class="k">Google Flood Hub</div>
+    <div class="v" style="color:${color}">${label}${trend}</div></div>`;
 }
 
 /* ---- SVG chart ---------------------------------------------------------- */
@@ -158,9 +174,19 @@ function chartSVG(p) {
   const nwm = (p.noaa_nwm || []).map(e => ({ t: +new Date(e.t), v: e.flow_m3s }));
   if (!obs.length && !fc.length && nwm.length < 2) return `<svg width="${W}" height="${H}"></svg>`;
 
-  const all = [...obs, ...fc, ...nwm];
-  const tMin = Math.min(...all.map(d => d.t));
-  const tMax = Math.max(...all.map(d => d.t));
+  const base = [...obs, ...fc, ...nwm];
+  const tMin = Math.min(...base.map(d => d.t));
+  const tMax = Math.max(...base.map(d => d.t));
+
+  // Google Flood Hub forecast — only when it speaks discharge (a stage-only
+  // model can't share the m³/s axis), clipped to the chart window since
+  // Google forecasts run out ~7 days.
+  const gf = p.google_flood;
+  const goog = (gf && gf.unit === 'CUBIC_METERS_PER_SECOND' ? gf.forecast || [] : [])
+    .map(e => ({ t: +new Date(e.t), v: e.v }))
+    .filter(d => d.t >= tMin && d.t <= tMax);
+
+  const all = [...base, ...goog];
   const th = p.thresholds;
 
   // Fit the y-axis to the data so the observed→forecast line is actually
@@ -210,6 +236,9 @@ function chartSVG(p) {
 
   // NWM overlay (dotted)
   if (nwm.length > 1) svg += `<path d="${line(nwm)}" fill="none" stroke="#7b61ff" stroke-width="1.5" stroke-dasharray="1.5 2.5" opacity="0.9"/>`;
+
+  // Google Flood Hub overlay (dash-dot)
+  if (goog.length > 1) svg += `<path d="${line(goog)}" fill="none" stroke="#00897b" stroke-width="1.5" stroke-dasharray="6 3 1.5 3" opacity="0.9"/>`;
 
   // observed (solid) + forecast (dashed)
   if (obs.length > 1) svg += `<path d="${line(obs)}" fill="none" stroke="${FLOW}" stroke-width="2.2"/>`;

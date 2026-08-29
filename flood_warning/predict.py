@@ -306,6 +306,24 @@ def run_all():
               f'analysis={len(n["nwm_analysis"])} | QPF={len(n["qpf"])}h '
               f'MRMS={len(n["mrms_precip"])}d')
 
+    # Google Flood Hub overlays — same rule as NOAA: display-only reference
+    # data, never fed back into the model. No-op without GOOGLE_FLOOD_API_KEY
+    # and the committed gauge mapping (see google_flood.py docstring).
+    from . import google_flood
+    goog = google_flood.enrich_sites([p['id'] for p in preds])
+    if goog:
+        print('Google Flood Hub overlays:')
+        for p in preds:
+            if p['id'] in goog:
+                g = goog[p['id']]
+                p['google_flood'] = g
+                print(f'  {p["id"]} {BY_ID[p["id"]]["short"]:<16}  '
+                      f'severity={g.get("severity")} trend={g.get("trend")} '
+                      f'forecast={len(g.get("forecast", []))}pts unit={g.get("unit")}')
+    elif google_flood.API_KEY:
+        print('Google Flood Hub overlays: no mapped gauges '
+              '(run `python -m flood_warning.google_flood` once to discover)')
+
     OUT_PATH.write_text(json.dumps({
         'model_id': 'dmv-cnn-12h',
         'updated': pd.Timestamp.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
