@@ -147,3 +147,35 @@ def design_storm(T=5.0, duration_hr=6.0, dt=60.0, peak_position=0.4):
     """A single reproducible event, for demos and regression tests."""
     depth = depth_for_return_period(T, duration_hr)
     return hyetograph(depth, duration_hr, dt, peak_position=peak_position)
+
+
+def storm_sequence(specs, gap_hr=6.0, dt=60.0, peak_position=0.4):
+    """Concatenate several events separated by dry gaps.
+
+    Back-to-back storms are what turn a drawdown into a deadline: storage
+    has to be recovered before the next peak arrives, and how fast you can
+    recover it is limited by the release threshold. With a single event and
+    a long recession there is no deadline, and release timing stops
+    mattering -- a constant valve schedule is then optimal.
+
+    ``specs`` is a list of ``(return_period, duration_hr)`` or
+    ``(return_period, duration_hr, peak_position)``.
+    """
+    pieces = []
+    gap = np.zeros(int(round(gap_hr * 3600.0 / dt)))
+    for i, spec in enumerate(specs):
+        if len(spec) == 3:
+            T, dur, pos = spec
+        else:
+            (T, dur), pos = spec, peak_position
+        depth = depth_for_return_period(T, dur)
+        pieces.append(hyetograph(depth, dur, dt, peak_position=pos))
+        if i < len(specs) - 1:
+            pieces.append(gap)
+    return np.concatenate(pieces)
+
+
+def back_to_back(T1=5.0, T2=10.0, duration_hr=6.0, gap_hr=6.0, dt=60.0):
+    """The standard two-event forcing used to create a drawdown deadline."""
+    return storm_sequence([(T1, duration_hr), (T2, duration_hr)],
+                          gap_hr=gap_hr, dt=dt)

@@ -60,6 +60,7 @@ travel-time identifiability check.
 | `scenarios.py` | pystorms-compatible wrappers and the objective |
 | `controllers.py` | uncontrolled, fixed, equal-filling, local threshold |
 | `excitation.py` | PRBS / multi-level / chirp valve schedules for system ID |
+| `randomize.py` | randomized basins + dimensionless groups, for pretraining |
 
 ## What P0 established
 
@@ -96,6 +97,35 @@ the timing problem disappears entirely. With 8 h, the same schedule scores
 400,822, worse than doing nothing, because it holds water it cannot release
 in time. Recession length is the knob that decides whether this is a
 scheduling problem at all.
+
+**The nondimensional collapse is exact below the spillway.** Scaling each
+basin by its own constants -- depth by `h_max`, flow by the full-open
+orifice discharge `q_max = Cd*A0*sqrt(2*g*h_max)`, time by the drain
+timescale `V_max/q_max` -- makes 60 randomly drawn basins one single
+function of `(h/h_max, u)`:
+
+| coordinates | single-basin floor | 60 basins pooled |
+|---|---|---|
+| full range, / orifice capacity | 0.033 | 0.760 |
+| full range, / total outlet capacity | 0.020 | 0.265 |
+| **sub-crest, / orifice capacity** | **0.0004** | **0.0004** |
+
+(k-NN residual variance; lower is better, 1.0 means no better than the mean.)
+
+Pooling costs nothing against fitting a single basin, so one pretrained
+model can cover every basin with no conditioning -- in exactly the regime a
+controller operates in. The collapse breaks only once the spillway engages,
+where the valve has lost authority anyway, and most of that damage is a
+poor choice of flow scale: the spillway-to-orifice capacity ratio spans
+180x across the prior, so normalizing by total outlet capacity recovers 3x
+of it.
+
+This also sharpens the architecture. Basin dynamics transfer, because every
+basin is the same equation with different constants. Reach travel times do
+not -- they are this network's geometry. So one half of the model can be
+pretrained once and reused, and the other half has to be identified per
+site from a short excitation campaign. That asymmetry, rather than the
+choice of JEPA or SINDy, is the reason for splitting the model in two.
 
 ## Deliberate differences from pystorms
 

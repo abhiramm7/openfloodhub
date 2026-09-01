@@ -9,13 +9,14 @@ from .routing import Reach
 from .network import Network, gamma_like, single_basin, GAMMA_REACHES
 from .scenarios import (GammaLike, PondScenario, SingleBasin, perf_metrics,
                         sampled_scenario, threshold)
-from .storms import (Catchment, NashCascade, StormSampler, design_storm,
-                     depth_for_return_period, hyetograph)
+from .storms import (Catchment, NashCascade, StormSampler, back_to_back,
+                     design_storm, depth_for_return_period, hyetograph,
+                     storm_sequence)
 
 __all__ = [
     "Basin", "BasinParams", "Reach", "Network", "gamma_like", "single_basin",
     "GAMMA_REACHES", "PondScenario", "SingleBasin", "GammaLike",
     "sampled_scenario", "perf_metrics", "threshold", "Catchment",
     "NashCascade", "StormSampler", "design_storm", "depth_for_return_period",
-    "hyetograph",
+    "hyetograph", "back_to_back", "storm_sequence",
 ]
