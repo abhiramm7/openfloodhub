@@ -34,8 +34,14 @@ from pondmpc.identify import identify_network
 from pondmpc.surrogate import surrogate_from_identification
 
 THRESHOLD = 1.0
-MPPI_KW = dict(n_blocks=36, block=10, n_samples=32, replan_every=60,
-               n_iters=1, terminal_weight=0.35, sigma=0.25)
+MPPI_KW = dict(n_blocks=36, block=10, n_samples=48, replan_every=90,
+               n_iters_first=10, n_iters=3, n_elite=8, sigma=0.10,
+               sigma_level=0.35, terminal_weight=0.08)
+
+# Cached from the coordinate descent on the train storms; set to None to
+# re-tune (about 13 minutes).
+TUNED_UNIFORM = 0.49
+TUNED_PER_BASIN = [0.1, 0.1, 0.1, 0.23, 0.23, 0.36, 0.23, 0.36, 0.49, 0.49, 0.49]
 
 
 def make_storms():
@@ -124,12 +130,17 @@ def main():
               % ("->".join(k), impl[k], ident[k]["travel_time"],
                  ident[k]["k_from_b"]), flush=True)
 
-    print("\ntuning static baselines on train storms...", flush=True)
-    u_best = tune_uniform(train, grid)
-    print("  best uniform: %.2f" % u_best, flush=True)
-    x_best, x_val = tune_per_basin(train, grid, u_best)
-    print("  best per-basin: %s (train mean %.1f)"
-          % (np.round(x_best, 2).tolist(), x_val), flush=True)
+    if TUNED_UNIFORM is None:
+        print("\ntuning static baselines on train storms...", flush=True)
+        u_best = tune_uniform(train, grid)
+        x_best, _ = tune_per_basin(train, grid, u_best)
+    else:
+        u_best = TUNED_UNIFORM
+        x_best = np.array(TUNED_PER_BASIN)
+        print("\nusing cached static baselines tuned on train storms",
+              flush=True)
+    print("  uniform: %.2f" % u_best, flush=True)
+    print("  per-basin: %s" % np.round(x_best, 2).tolist(), flush=True)
 
     def mk_true():
         n = gamma_like(); n.reset(); return n
