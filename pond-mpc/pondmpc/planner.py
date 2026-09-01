@@ -20,7 +20,9 @@ class MPPI:
     def __init__(self, model, order, flow_threshold=1.0, n_blocks=36,
                  block=10, n_samples=48, sigma=0.25, temperature=None,
                  flood_weight=100.0, terminal_weight=0.35,
-                 replan_every=30, seed=0, substeps=1, n_iters=2):
+                 replan_every=30, seed=0, substeps=1, n_iters=2,
+                 sigma_level=0.30, smooth=0.85, n_elite=8, shrink=0.8,
+                 n_iters_first=10):
         self.model = model
         self.order = list(order)
         self.n = len(self.order)
@@ -36,6 +38,29 @@ class MPPI:
         self.n_samples = int(n_samples)
         self.n_iters = int(n_iters)
         self.sigma = float(sigma)
+        # Noise is split into a per-basin constant offset and a smooth
+        # temporal wiggle. Sampling every block independently spends the
+        # whole budget on jagged trajectories, and in this scenario the good
+        # policies are nearly constant in time -- an i.i.d. sampler cannot
+        # even represent the static schedule it has to beat. `sigma_level`
+        # is the spread of the constant part; `smooth` is the AR(1)
+        # correlation applied along the horizon to the varying part.
+        self.sigma_level = float(sigma_level)
+        self.smooth = float(smooth)
+        # Elite selection rather than a softmax over all samples. With a few
+        # dozen samples in a few hundred dimensions the softmax weights are
+        # diffuse, and averaging good trajectories that differ in *which*
+        # basin they throttle produces a trajectory worse than the one it
+        # started from -- measurably so: the update moved the plan from
+        # 6,288 to 8,642 on the planner's own cost.
+        self.n_elite = int(n_elite)
+        self.shrink = float(shrink)
+        # The first plan starts from a flat nominal and needs a real search
+        # budget; every later plan warm-starts from the shifted previous
+        # solution and needs far less. Spending the first-plan budget at
+        # every replan is most of the cost for none of the benefit.
+        self.n_iters_first = int(n_iters_first)
+        self._planned_once = False
         self.flood_weight = float(flood_weight)
         self.terminal_weight = float(terminal_weight)
         self.replan_every = int(replan_every)
@@ -109,20 +134,41 @@ class MPPI:
         snap = self.model.snapshot()
         forecast = self._forecast(k)
 
-        for _ in range(self.n_iters):
-            noise = self.rng.normal(
-                0.0, self.sigma,
-                size=(self.n_samples, self.n_blocks, self.n))
-            samples = np.clip(self.nominal[None] + noise, 0.0, 1.0)
+        best_traj = self.nominal.copy()
+        best_cost = self._rollout_cost(best_traj, forecast, snap)
+        sig_l, sig_w = self.sigma_level, self.sigma
+        n_iters = self.n_iters_first if not self._planned_once else self.n_iters
+        self._planned_once = True
+
+        for _ in range(n_iters):
+            level = self.rng.normal(
+                0.0, sig_l, size=(self.n_samples, 1, self.n))
+            wiggle = self.rng.normal(
+                0.0, sig_w, size=(self.n_samples, self.n_blocks, self.n))
+            # AR(1) smoothing along the horizon: the good policies here are
+            # nearly constant in time, and independent per-block noise spends
+            # the whole sample budget on jagged trajectories.
+            for b in range(1, self.n_blocks):
+                wiggle[:, b] = (self.smooth * wiggle[:, b - 1]
+                                + np.sqrt(1.0 - self.smooth ** 2) * wiggle[:, b])
+            samples = np.clip(self.nominal[None] + level + wiggle, 0.0, 1.0)
+
             costs = np.array([self._rollout_cost(s, forecast, snap)
                               for s in samples])
-            lam = self.temperature
-            if lam is None:
-                lam = max(costs.std(), 1e-6)
-            w = np.exp(-(costs - costs.min()) / lam)
-            w /= w.sum()
-            self.nominal = np.clip(
-                np.einsum("s,sbh->bh", w, samples), 0.0, 1.0)
+            elite = np.argsort(costs)[:self.n_elite]
+            self.nominal = np.clip(samples[elite].mean(axis=0), 0.0, 1.0)
+
+            if costs[elite[0]] < best_cost:
+                best_cost = float(costs[elite[0]])
+                best_traj = samples[elite[0]].copy()
+            sig_l *= self.shrink
+            sig_w *= self.shrink
+
+        # Never return a plan worse than the best trajectory actually seen --
+        # the elite mean can fall outside the elite set.
+        mean_cost = self._rollout_cost(self.nominal, forecast, snap)
+        if mean_cost > best_cost:
+            self.nominal = best_traj
         self.model.restore(snap)
         return self.nominal[0].copy()
 
