@@ -61,6 +61,9 @@ travel-time identifiability check.
 | `controllers.py` | uncontrolled, fixed, equal-filling, local threshold |
 | `excitation.py` | PRBS / multi-level / chirp valve schedules for system ID |
 | `randomize.py` | randomized basins + dimensionless groups, for pretraining |
+| `identify.py` | sparse identification of reach travel times and storage |
+| `surrogate.py` | a Network carrying identified parameters, for planning |
+| `planner.py` | MPPI over valve trajectories |
 
 ## What P0 established
 
@@ -146,6 +149,42 @@ release but fills the basins, and past a point they overtop:
 
 A controller that cannot time its releases has to pick a point on this
 curve. One that can should beat all of them.
+
+**Reach travel times are recovered exactly.** From three excited events,
+sparse identification returns all ten reach lags to the timestep, and the
+storage constant to within a few percent:
+
+| method | travel time | storage constant k (true 180 s) |
+|---|---|---|
+| cross-correlation | 184 s mean error | not identifiable |
+| sparse fit, continuous form | **10/10 exact** | 311 ± 35 |
+| sparse fit, discrete form | **10/10 exact** | **187 ± 7** |
+
+Three things had to be right, and each was found the hard way:
+
+* **One lag at a time.** Putting every candidate lag in a single library
+  fails — adjacent lags of a smooth signal are near-collinear, so least
+  squares spreads weight across a band of them with alternating signs and
+  the storage term gets swamped. Scanning lags individually is well-posed.
+* **Discrete form.** The reach *is* a discrete linear reservoir. Fitting
+  `y[t+1] = c0*y[t] + c*Q_up[t-L]` matches the data-generating process and
+  reads k straight off the pole; finite-differencing `dy/dt` and inverting
+  a coefficient leaves k 73% high even when the lag is exact.
+* **Compact runoff basis.** Local runoff arrives alongside the routed water
+  and is never observed separately. Exponential kernels at a few timescales
+  represent it in well-conditioned terms; many lagged rainfall columns do
+  not.
+
+Two things that sound reasonable and are not. Restricting the fit to dry
+weather to remove the runoff nuisance also removes the strongest
+excitation: under the continuous form the lag estimates collapse, and under
+the discrete form it makes no difference, so there is no reason to do it.
+And the identification exposed a simulator bug rather than a modelling
+error — the reach took its outflow from storage *before* adding the
+arriving water, costing a full extra timestep of lag. That appeared as a
+uniform one-step bias in every recovered travel time. `Network` now exposes
+`implemented_delays()` so identification is scored against what the
+discretized network actually does, not the nominal length/celerity.
 
 ## Deliberate differences from pystorms
 
