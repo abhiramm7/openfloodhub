@@ -6,3 +6,7 @@ outputs/
 *.npy
 *.pt
 .pytest_cache/
+
+# Written continuously by scripts/results.py while a sweep is running.
+# The finished table is committed explicitly with `git add -f`.
+results.json
