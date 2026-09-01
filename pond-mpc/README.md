@@ -53,7 +53,7 @@ travel-time identifiability check.
 
 | module | role |
 |---|---|
-| `basin.py` | storage / orifice / spillway physics, RK4 on volume |
+| `basin.py` | storage / orifice physics, RK4 on volume |
 | `routing.py` | reach = translation (travel time) + linear reservoir |
 | `network.py` | basins wired by reaches; `gamma_like()` preset |
 | `storms.py` | hyetographs, Nash-cascade runoff, train/test storm splits |
@@ -98,34 +98,54 @@ the timing problem disappears entirely. With 8 h, the same schedule scores
 in time. Recession length is the knob that decides whether this is a
 scheduling problem at all.
 
-**The nondimensional collapse is exact below the spillway.** Scaling each
-basin by its own constants -- depth by `h_max`, flow by the full-open
-orifice discharge `q_max = Cd*A0*sqrt(2*g*h_max)`, time by the drain
-timescale `V_max/q_max` -- makes 60 randomly drawn basins one single
-function of `(h/h_max, u)`:
+**The nondimensional collapse is exact.** The outlet is a gated orifice and
+nothing else — above capacity a basin floods rather than spilling. Scaling
+each basin by its own constants (depth by `h_max`, flow by the full-open
+discharge `q_max = Cd*A0*sqrt(2*g*h_max)`, time by `V_max/q_max`) then makes
+the discharge relation
 
-| coordinates | single-basin floor | 60 basins pooled |
-|---|---|---|
-| full range, / orifice capacity | 0.033 | 0.760 |
-| full range, / total outlet capacity | 0.020 | 0.265 |
-| **sub-crest, / orifice capacity** | **0.0004** | **0.0004** |
+    Q / q_max = u * sqrt(h / h_max)
 
-(k-NN residual variance; lower is better, 1.0 means no better than the mean.)
+identically, for every basin, with no free parameters. Verified to 2.2e-16
+over 200 randomly drawn basins. Pooling costs nothing against fitting one
+basin, and there is nothing left to condition on — which is what makes a
+single pretrained basin model possible.
 
-Pooling costs nothing against fitting a single basin, so one pretrained
-model can cover every basin with no conditioning -- in exactly the regime a
-controller operates in. The collapse breaks only once the spillway engages,
-where the valve has lost authority anyway, and most of that damage is a
-poor choice of flow scale: the spillway-to-orifice capacity ratio spans
-180x across the prior, so normalizing by total outlet capacity recovers 3x
-of it.
+A spillway destroys this, which is why there is not one. Turning the weir
+back on (`random_basin_params(..., spillway=True)`) adds a second, ungated
+discharge path whose capacity relative to the orifice spans 180x across
+plausible geometries, and the pooled k-NN residual goes from the
+single-basin floor to roughly 20x it. The weir code is retained so that
+cost can be measured, but it is off by default.
 
 This also sharpens the architecture. Basin dynamics transfer, because every
 basin is the same equation with different constants. Reach travel times do
-not -- they are this network's geometry. So one half of the model can be
+not — they are this network's geometry. So one half of the model can be
 pretrained once and reused, and the other half has to be identified per
 site from a short excitation campaign. That asymmetry, rather than the
 choice of JEPA or SINDy, is the reason for splitting the model in two.
+
+**Basin sizes are derived, not chosen.** With no relief path, an undersized
+basin simply floods, so storage is set to 35% of the design event's runoff
+volume from each basin's *cumulative* drainage area, and every orifice is
+sized so a full basin at full open discharges three times the flow
+threshold (`scripts/size_basins.py`). Sizing off local area alone left the
+downstream basins far too small and made the scenario infeasible — every
+uniform valve setting was worse than leaving the valves open.
+
+The resulting scenario has the tension it needs. Throttling cuts the peak
+release but fills the basins, and past a point they overtop:
+
+| uniform setting | performance | peak release | flooding m³ |
+|---|---|---|---|
+| open | 131,369 | 2.62 | 0 |
+| 0.70 | 82,497 | 2.01 | 0 |
+| **0.50** | **53,743** | 1.50 | 283 |
+| 0.40 | 175,147 | 1.20 | 1,277 |
+| 0.25 | 702,426 | 0.75 | 4,276 |
+
+A controller that cannot time its releases has to pick a point on this
+curve. One that can should beat all of them.
 
 ## Deliberate differences from pystorms
 

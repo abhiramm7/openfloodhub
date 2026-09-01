@@ -63,22 +63,44 @@ def test_perf_metrics_matches_pystorms_contract():
         perf_metrics(v, "nonsense")
 
 
-def test_closing_valves_forces_uncontrolled_spill():
-    """Shutting every valve does not flood -- the spillway takes over. The
-    water leaves anyway, just through a route the controller cannot meter.
-    That is why spill is tracked separately from metered release."""
+def test_closing_valves_floods():
+    """With the orifice as the only outlet there is no relief path: holding
+    water past capacity floods rather than spilling. Storage is genuinely
+    scarce, which is what makes release timing consequential."""
     r = design_storm(T=10.0, duration_hr=6.0, dt=60.0)
     shut = GammaLike(rainfall=r); shut.rollout(lambda s: np.zeros(11))
     open_ = GammaLike(rainfall=r); open_.rollout(None)
     s_shut, s_open = shut.summary(), open_.summary()
-    assert s_shut["spill_fraction"] > 0.9
-    assert s_open["spill_fraction"] < 0.1
+    assert s_shut["flood_volume_m3"] > 0.0
+    assert s_open["flood_volume_m3"] == 0.0
+    assert s_shut["spill_fraction"] == 0.0  # no spillway configured
     assert shut.performance() > open_.performance()
 
 
+def test_throttling_trades_peak_against_flooding():
+    """The tension the scenario is built around: throttling cuts the peak
+    release but fills the basins, and past a point the basins overtop. A
+    controller that cannot time its releases has to pick a point on this
+    curve; one that can should beat all of them."""
+    r = design_storm(T=10.0, duration_hr=6.0, dt=60.0)
+    out = {}
+    for v in (1.0, 0.5, 0.25):
+        sc = GammaLike(rainfall=r, flow_threshold=1.0)
+        sc.rollout(lambda s, v=v: np.full(11, v))
+        out[v] = sc.summary()
+    assert out[1.0]["peak_flow"] > out[0.5]["peak_flow"] > out[0.25]["peak_flow"]
+    assert out[1.0]["flood_volume_m3"] < out[0.5]["flood_volume_m3"] < out[0.25]["flood_volume_m3"]
+    assert out[0.5]["performance"] < out[1.0]["performance"]
+    assert out[0.5]["performance"] < out[0.25]["performance"]
+
+
 def test_control_authority_exists():
-    """A uniform throttle must beat doing nothing, or there is no problem."""
+    """A uniform throttle must beat doing nothing, or there is no problem.
+
+    0.5 is near the best uniform setting; throttling much harder crosses the
+    flooding cliff and is far worse than doing nothing, which is the point
+    of test_throttling_trades_peak_against_flooding above."""
     r = design_storm(T=10.0, duration_hr=6.0, dt=60.0)
     unc = GammaLike(rainfall=r); unc.rollout(None)
-    thr = GammaLike(rainfall=r); thr.rollout(lambda s: np.full(11, 0.25))
+    thr = GammaLike(rainfall=r); thr.rollout(lambda s: np.full(11, 0.5))
     assert thr.performance() < 0.5 * unc.performance()

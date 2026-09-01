@@ -127,7 +127,7 @@ class Network:
 def single_basin(dt=60.0, threshold_ready=True):
     """One basin on one catchment. The P1 unit test."""
     p = BasinParams("1", k_s=2200.0, b_s=1.15, max_depth=4.0,
-                    orifice_area=0.45, weir_length=5.0)
+                    orifice_area=0.45)
     basin = Basin(p)
     catch = Catchment(area_m2=5.0e5, runoff_coeff=0.35, k_s=1200.0)
     return Network([basin], [], {"1": catch}, outfall_from="1", dt=dt)
@@ -150,25 +150,27 @@ GAMMA_REACHES = [
 ]
 
 # Basin plan-area coefficient (m^2), max depth (m), orifice area (m^2),
-# catchment area (ha).
+# local catchment area (ha).
 #
-# Calibrated so that throttling each basin locally to the flow threshold is
-# NOT sufficient: storage is scarce enough that a purely local hold-back
-# starts to overtop. That is the only regime in which release timing --
-# and therefore travel time -- carries information a local controller does
-# not already have. See scripts/tune.py for the sweep behind these numbers.
+# Derived, not guessed: see scripts/size_basins.py. Storage is 35% of the
+# design event's runoff volume from each basin's CUMULATIVE drainage area,
+# and every orifice is sized so that a full basin at full open discharges
+# three times the flow threshold. With no spillway there is no relief path,
+# so a basin that is undersized for what drains into it simply floods --
+# sizing off local area alone (the earlier table) left the downstream
+# basins far too small and made the scenario infeasible.
 GAMMA_BASINS = {
-    "1":   (3150.0, 4.38, 0.90, 54.0),
-    "2":   (1950.0, 3.50, 0.55, 26.4),
-    "3":   (1800.0, 3.50, 0.50, 21.6),
-    "4":   (2850.0, 3.94, 0.75, 42.0),
-    "5":   (1650.0, 3.50, 0.50, 24.0),
-    "6":   (2250.0, 5.25, 0.60, 33.6),
-    "7":   (1350.0, 3.50, 0.40, 16.8),
-    "8":   (1500.0, 3.50, 0.45, 19.2),
-    "9":   (1425.0, 3.50, 0.40, 18.0),
-    "10":  (2100.0, 4.81, 0.55, 28.8),
-    "11":  (1575.0, 5.25, 0.45, 20.4),
+    "1":   (4310.7, 5.50, 0.444, 54.0),
+    "2":   (3692.4, 5.31, 0.452, 26.4),
+    "3":   (3378.4, 5.21, 0.457, 21.6),
+    "4":   (3115.0, 5.12, 0.461, 42.0),
+    "5":   (1916.2, 4.65, 0.483, 24.0),
+    "6":   (1568.6, 4.48, 0.492, 33.6),
+    "7":   (381.7, 3.64, 0.546, 16.8),
+    "8":   (761.4, 3.99, 0.522, 19.2),
+    "9":   (405.6, 3.67, 0.544, 18.0),
+    "10":  (966.4, 4.13, 0.513, 28.8),
+    "11":  (452.6, 3.72, 0.540, 20.4),
 }
 
 
@@ -182,7 +184,7 @@ def gamma_like(dt=60.0, celerity=1.5, flow_dependent=False, seed=0):
     basins, catchments = [], {}
     for name, (k_s, max_depth, orifice, catch_ha) in GAMMA_BASINS.items():
         p = BasinParams(name, k_s=k_s, b_s=1.15, max_depth=max_depth,
-                        orifice_area=orifice, weir_length=6.0)
+                        orifice_area=orifice)
         basins.append(Basin(p))
         catchments[name] = Catchment(area_m2=catch_ha * 1.0e4,
                                      runoff_coeff=0.35, k_s=1200.0)

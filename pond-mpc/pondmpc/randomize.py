@@ -21,12 +21,14 @@ PRIORS = {
     "b_s": (1.0, 1.4),             # storage exponent
     "max_depth": (2.0, 7.0),       # m
     "orifice_area": (0.15, 1.20),  # m^2
-    "weir_length": (2.0, 12.0),    # m
+    "weir_length": (2.0, 12.0),    # m, only used when spillway=True
     "crest_ratio": (0.75, 0.95),   # weir crest as a fraction of max depth
 }
 
 
-def random_basin_params(rng, name="r", priors=None):
+def random_basin_params(rng, name="r", priors=None, spillway=False):
+    """Draw a basin. ``spillway=True`` restores the weir, which is available
+    for measuring what it costs the collapse but is off by default."""
     p = dict(PRIORS if priors is None else priors)
     lo_hi = lambda k: rng.uniform(*p[k])
     max_depth = lo_hi("max_depth")
@@ -37,7 +39,7 @@ def random_basin_params(rng, name="r", priors=None):
         max_depth=max_depth,
         orifice_area=lo_hi("orifice_area"),
         weir_crest=lo_hi("crest_ratio") * max_depth,
-        weir_length=lo_hi("weir_length"),
+        weir_length=lo_hi("weir_length") if spillway else 0.0,
     )
 
 
@@ -58,14 +60,13 @@ def dimensionless_groups(p):
     """The groups a nondimensional basin model still has to be told about.
 
     The orifice relation nondimensionalizes exactly -- Q/q_max = u*sqrt(h/h_max)
-    for every basin, with no free parameters. What does *not* vanish:
+    for every basin, with no free parameters. With no spillway, that is the
+    whole outflow relation, ``weir_ratio`` is zero, and nothing is left to
+    condition on: one function covers every basin.
 
-    * ``b_s``          storage shape, which sets how depth responds to volume
-    * ``weir_ratio``   spillway capacity at max depth relative to q_max
-    * ``crest_ratio``  where the spillway starts, as a fraction of max depth
-
-    So the prediction is that conditioning on three numbers is enough, and
-    that a model given them transfers to an unseen basin without retraining.
+    ``b_s`` still shapes the *dynamics*, since it sets how depth responds to
+    a change in volume, so a model predicting depth (rather than discharge)
+    still needs it.
     """
     s = scales(p)
     head = p.max_depth - p.weir_crest

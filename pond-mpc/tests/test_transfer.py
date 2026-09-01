@@ -19,7 +19,7 @@ def _knn_residual(X, y, k=8, n_train=1500, n_test=800, seed=0):
     return float(np.mean((pred - yte) ** 2) / (np.var(yte) + 1e-12))
 
 
-def _sample(p, rng, n, sub_crest):
+def _sample(p, rng, n, sub_crest=False):
     b = Basin(p)
     q_max = scales(p)["q_max"]
     hi = p.weir_crest if sub_crest else p.max_depth
@@ -32,37 +32,50 @@ def _sample(p, rng, n, sub_crest):
     return np.array(rows)
 
 
-def test_subcrest_collapse_is_exact():
-    """Below the spillway crest, every basin is the same function of
-    (h/h_max, u). This is what makes one pretrained basin model plausible:
-    pooling 30 basins costs nothing against fitting one.
-    """
+def test_collapse_is_exact_analytically():
+    """With an orifice as the only outlet, the discharge relation is
+    Q/q_max = u * sqrt(h/h_max) for every basin -- identically, not
+    approximately. This is the property a single pretrained basin model
+    rests on, so it is asserted to machine precision rather than
+    statistically."""
+    rng = np.random.default_rng(0)
+    for i in range(200):
+        p = random_basin_params(rng, name=str(i))
+        b = Basin(p)
+        h = rng.uniform(0.0, p.max_depth)
+        u = rng.uniform(0.0, 1.0)
+        q_hat = (b.orifice_flow(h, u) + b.weir_flow(h)) / scales(p)["q_max"]
+        assert q_hat == pytest.approx(u * np.sqrt(h / p.max_depth), abs=1e-12)
+        assert dimensionless_groups(p)["weir_ratio"] == 0.0
+
+
+def test_collapse_is_exact_statistically():
+    """The same claim as measured: pooling 30 basins is no worse than
+    fitting one."""
     rng = np.random.default_rng(0)
     basins = [random_basin_params(rng, name=str(i)) for i in range(30)]
-    pooled = np.vstack([_sample(p, rng, 200, True) for p in basins])
-    solo = np.vstack([_sample(basins[0], rng, 3000, True)])
+    pooled = np.vstack([_sample(p, rng, 200) for p in basins])
+    solo = np.vstack([_sample(basins[0], rng, 3000)])
 
     floor = _knn_residual(solo[:, :2], solo[:, 2])
     together = _knn_residual(pooled[:, :2], pooled[:, 2])
     assert floor < 0.01
-    assert together < 5 * max(floor, 1e-4)
+    assert together < 3 * max(floor, 1e-4)
 
 
-def test_spillway_breaks_the_collapse():
-    """Above the crest it stops being one function -- the spillway-to-orifice
-    capacity ratio spans two orders of magnitude across the prior. Recorded
-    so that a later model is not credited with fixing something that was
-    never broken."""
+def test_spillway_is_what_breaks_the_collapse():
+    """Turning the weir back on destroys it: the spillway-to-orifice
+    capacity ratio spans two orders of magnitude across the prior, so the
+    outflow relation stops being one function. Kept as the record of why
+    the default outlet is an orifice alone."""
     rng = np.random.default_rng(0)
-    basins = [random_basin_params(rng, name=str(i)) for i in range(30)]
+    basins = [random_basin_params(rng, name=str(i), spillway=True)
+              for i in range(30)]
     ratios = [dimensionless_groups(p)["weir_ratio"] for p in basins]
     assert max(ratios) / min(ratios) > 20
 
-    pooled = np.vstack([_sample(p, rng, 200, False) for p in basins])
-    solo = np.vstack([_sample(basins[0], rng, 3000, False)])
-    # The separation is ~23x at the sample sizes in scripts/collapse_check2.py;
-    # this test runs smaller and cheaper, where the single-basin floor is
-    # itself inflated by the kink at the crest, so the margin is thinner.
+    pooled = np.vstack([_sample(p, rng, 200) for p in basins])
+    solo = np.vstack([_sample(basins[0], rng, 3000)])
     assert (_knn_residual(pooled[:, :2], pooled[:, 2])
             > 4 * _knn_residual(solo[:, :2], solo[:, 2]))
 
