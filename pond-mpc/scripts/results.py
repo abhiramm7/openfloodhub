@@ -34,8 +34,11 @@ from pondmpc.identify import identify_network
 from pondmpc.surrogate import surrogate_from_identification
 
 THRESHOLD = 1.0
-MPPI_KW = dict(n_blocks=36, block=10, n_samples=48, replan_every=90,
-               n_iters_first=10, n_iters=3, n_elite=8, sigma=0.10,
+# Verified on the T=5 train storm: this configuration scores 400 where a
+# cheaper one (48 samples, 10/3 iterations, replanning every 90 steps)
+# scores 6,504. Replanning frequency matters more than sample count.
+MPPI_KW = dict(n_blocks=36, block=10, n_samples=64, replan_every=60,
+               n_iters_first=12, n_iters=4, n_elite=10, sigma=0.10,
                sigma_level=0.35, terminal_weight=0.08)
 
 # Cached from the coordinate descent on the train storms; set to None to
@@ -159,6 +162,21 @@ def main():
     }
 
     rows = {}
+
+    def checkpoint():
+        """Write after every episode. The planner runs take minutes each and
+        losing a multi-hour sweep to a crash at the end is avoidable."""
+        with open("results.json", "w") as f:
+            json.dump({"identification": {
+                           "->".join(k): {"true_s": impl[k],
+                                          "est_s": ident[k]["travel_time"],
+                                          "k_s": ident[k]["k_from_b"]}
+                           for k in impl},
+                       "n_exact": n_exact,
+                       "uniform_setting": float(u_best),
+                       "per_basin_setting": np.round(x_best, 3).tolist(),
+                       "results": rows, "mppi": MPPI_KW}, f, indent=2)
+
     for split, storms in (("train", train), ("test", test)):
         for name, (kind, fn) in controllers.items():
             for label, rain in storms:
@@ -169,6 +187,7 @@ def main():
                     sc = run_mppi(rain, fn, flow_threshold=THRESHOLD,
                                   substeps=1, seed=0, **MPPI_KW)
                 rows.setdefault(name, {})[label] = summarize(sc)
+                checkpoint()
                 print("  %-20s %-22s perf=%10.1f  (%.0fs)"
                       % (name, label, sc.performance(), time.time() - t0),
                       flush=True)
@@ -178,8 +197,10 @@ def main():
         x, v = tune_per_basin([(label, rain)], grid, u_best, sweeps=1)
         sc = score(rain, lambda s, xx=x: xx)
         rows.setdefault("per-basin (oracle)", {})[label] = summarize(sc)
+        checkpoint()
         print("  %-22s perf=%10.1f" % (label, sc.performance()), flush=True)
 
+    checkpoint()
     out = {"identification": {"->".join(k): {"true_s": impl[k],
                                              "est_s": ident[k]["travel_time"],
                                              "k_s": ident[k]["k_from_b"]}
