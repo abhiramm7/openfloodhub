@@ -59,6 +59,15 @@ class Reach:
             c = self.celerity * speedup
         return int(round((self.length_m / c) / dt))
 
+    def implemented_delay(self, dt):
+        """Onset lag the discretized reach actually produces, in seconds.
+
+        Differs from ``travel_time`` by the rounding of the delay line to a
+        whole number of steps. This is what an identification method sees,
+        so it is the honest target to score against.
+        """
+        return self.lag_steps(dt) * dt
+
     def reset(self, dt):
         n = max(self.lag_steps(dt), 0) + 2
         self._buffer = np.zeros(n)
@@ -78,8 +87,13 @@ class Reach:
 
         if self.k_attenuation <= 0.0:
             return delayed
-        out = self._storage / self.k_attenuation
-        self._storage += dt * (delayed - out)
+
+        # Semi-implicit: solve S_new = S + dt*(delayed - S_new/k) rather than
+        # taking the outflow from the storage *before* this step's arrival.
+        # The explicit form costs a full extra timestep of lag, which shows
+        # up as a one-step bias in anything that identifies the travel time
+        # from data -- a discretization artifact masquerading as physics.
+        self._storage = (self._storage + dt * delayed) / (1.0 + dt / self.k_attenuation)
         if self._storage < 0.0:
             self._storage = 0.0
-        return out
+        return self._storage / self.k_attenuation

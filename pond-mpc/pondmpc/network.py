@@ -41,8 +41,18 @@ class Network:
         return None
 
     def travel_times(self):
-        """Ground-truth lags, in seconds, keyed by (source, target)."""
+        """Nominal lags (length / celerity), in seconds, keyed by (source, target)."""
         return {(r.source, r.target): r.travel_time for r in self.reaches}
+
+    def implemented_delays(self):
+        """Lags the discretized network actually produces.
+
+        The delay line rounds to whole steps, so this differs from
+        ``travel_times`` by up to half a timestep. Identification methods
+        should be scored against these.
+        """
+        return {(r.source, r.target): r.implemented_delay(self.dt)
+                for r in self.reaches}
 
     def longest_path_time(self):
         """Travel time from the most distant basin to the outfall.
