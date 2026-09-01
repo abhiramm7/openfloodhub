@@ -186,6 +186,80 @@ uniform one-step bias in every recovered travel time. `Network` now exposes
 `implemented_delays()` so identification is scored against what the
 discretized network actually does, not the nominal length/celerity.
 
+## Results
+
+`scripts/results.py` (~3.8 h). Static policies are tuned on the train
+storms and scored on held-out ones; a schedule tuned on the storm it is
+then scored on is an oracle, not a baseline, so it appears as its own row.
+Lower is better; all values are the pystorms-style cumulative objective.
+
+**Train** (T = 1–5 yr):
+
+| controller | mean |
+|---|---|
+| uncontrolled | 81,767 |
+| uniform (train-tuned) | 8,286 |
+| local threshold | 45,627 |
+| **MPPI + identified** | **176** |
+| MPPI + true model | 259 |
+| per-basin static (train-tuned) | **0** |
+
+**Test** (T = 25–100 yr, plus double-peak and back-to-back):
+
+| controller | mean |
+|---|---|
+| uncontrolled | 634,326 |
+| uniform (train-tuned) | 1,441,728 |
+| per-basin static (train-tuned) | 1,544,365 |
+| local threshold | 1,861,085 |
+| per-basin static (**hindsight**, saw the test storm) | 885,707 |
+| **MPPI + identified** | **242,657** |
+| MPPI + true model | 244,304 |
+
+Four things worth stating plainly.
+
+**In distribution, the planner is pointless.** A static per-basin schedule
+scores exactly 0 on the train storms. Anyone evaluating only on the events
+they tuned for would correctly conclude that this network needs a lookup
+table, not a controller.
+
+**Out of distribution, every static policy is worse than doing nothing.**
+Tuned on 1–5 year events they throttle hard; on a 100 year event that
+throttling fills the basins and they overtop. The train-tuned per-basin
+schedule floods 26,880 m³ on T=100, and flooding alone accounts for 2.7M
+of its 2.75M cost. Doing nothing floods 9,560 m³. Throttling on a storm
+larger than the one you tuned for is actively dangerous, and no amount of
+tuning fixes it — see the next point.
+
+**The gain is feedback, not tuning.** The hindsight row is a static
+schedule fitted to the very storm it is scored on, and it still loses to
+the planner by 3.6x. Perfect foresight about the event is not a substitute
+for being able to change your mind during it.
+
+**The identified model is as good as the true one.** 242,657 against
+244,304, a 0.7% difference, with the ordering flipping between storms.
+Whatever separates the planner from optimal here is planning error, not
+model error — which is the point of carrying the oracle row at all.
+
+### What is left on the table
+
+The planner's remaining cost is almost entirely the terminal penalty for
+water still in storage at the end, not flooding (0–6% of the total) and
+not threshold violation. It finishes the big test storms with 2.1–2.4 m
+still impounded.
+
+The cause is a straightforward miscalibration: the planner charges 0.08
+per m³ of stored water at its horizon while the scenario charges 10 per m³
+at the end of the episode, 125x more. The value was picked by sweeping on
+a train storm, where draining is easy and holding water costs nothing. The
+right fix is a time-varying terminal weight — carrying water past the
+horizon is nearly free early in an event and expensive near the drain
+deadline — which is the obvious next experiment rather than a further
+sweep of a constant.
+
+So the test numbers above are a floor on what this architecture achieves,
+established despite a planner that is not charged properly for hoarding.
+
 ## Deliberate differences from pystorms
 
 - **Volumetric objective.** gamma's flat 1e6-per-flooding-timestep penalty

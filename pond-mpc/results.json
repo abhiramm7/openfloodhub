@@ -1,0 +1,657 @@
+{
+  "identification": {
+    "9->8": {
+      "true_s": 180.0,
+      "est_s": 180.0,
+      "k_s": 200.59100213496382
+    },
+    "8->6": {
+      "true_s": 420.0,
+      "est_s": 420.0,
+      "k_s": 193.6121979716562
+    },
+    "7->6": {
+      "true_s": 120.0,
+      "est_s": 120.0,
+      "k_s": 193.6121979716562
+    },
+    "6->5": {
+      "true_s": 780.0,
+      "est_s": 780.0,
+      "k_s": 181.2487958737745
+    },
+    "5->4": {
+      "true_s": 120.0,
+      "est_s": 120.0,
+      "k_s": 181.50347102375338
+    },
+    "11->10": {
+      "true_s": 720.0,
+      "est_s": 720.0,
+      "k_s": 193.86630977749024
+    },
+    "10->4": {
+      "true_s": 420.0,
+      "est_s": 420.0,
+      "k_s": 181.50347102375338
+    },
+    "4->3": {
+      "true_s": 600.0,
+      "est_s": 600.0,
+      "k_s": 180.26333475762607
+    },
+    "3->2": {
+      "true_s": 120.0,
+      "est_s": 120.0,
+      "k_s": 180.50896256702248
+    },
+    "2->1": {
+      "true_s": 540.0,
+      "est_s": 540.0,
+      "k_s": 182.13292724017333
+    }
+  },
+  "n_exact": 10,
+  "uniform_setting": 0.49,
+  "per_basin_setting": [
+    0.1,
+    0.1,
+    0.1,
+    0.23,
+    0.23,
+    0.36,
+    0.23,
+    0.36,
+    0.49,
+    0.49,
+    0.49
+  ],
+  "results": {
+    "uncontrolled": {
+      "train T=1 D=6.2h": {
+        "performance": 69138.084,
+        "peak_flow": 2.091,
+        "outfall_peak": 1.747,
+        "exceedance_steps": 2110.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "train T=5 D=5.6h": {
+        "performance": 115939.105,
+        "peak_flow": 2.56,
+        "outfall_peak": 1.974,
+        "exceedance_steps": 2537.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "train T=1 D=11.8h": {
+        "performance": 60224.485,
+        "peak_flow": 1.769,
+        "outfall_peak": 1.769,
+        "exceedance_steps": 2102.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test T=25 D=9.1h": {
+        "performance": 544164.151,
+        "peak_flow": 3.004,
+        "outfall_peak": 2.41,
+        "exceedance_steps": 3577.0,
+        "flood_volume_m3": 3173.597,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test T=100 D=8.2h": {
+        "performance": 1231922.192,
+        "peak_flow": 3.004,
+        "outfall_peak": 2.586,
+        "exceedance_steps": 4040.0,
+        "flood_volume_m3": 9560.149,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test T=100 D=8.9h": {
+        "performance": 1074687.979,
+        "peak_flow": 3.004,
+        "outfall_peak": 2.623,
+        "exceedance_steps": 4127.0,
+        "flood_volume_m3": 7921.505,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test double-peak": {
+        "performance": 78957.719,
+        "peak_flow": 2.375,
+        "outfall_peak": 1.746,
+        "exceedance_steps": 2083.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test back-to-back": {
+        "performance": 241895.334,
+        "peak_flow": 2.677,
+        "outfall_peak": 2.109,
+        "exceedance_steps": 5274.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      }
+    },
+    "uniform (train)": {
+      "train T=1 D=6.2h": {
+        "performance": 4190.388,
+        "peak_flow": 1.258,
+        "outfall_peak": 0.89,
+        "exceedance_steps": 675.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "train T=5 D=5.6h": {
+        "performance": 17059.394,
+        "peak_flow": 1.439,
+        "outfall_peak": 0.997,
+        "exceedance_steps": 1810.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "train T=1 D=11.8h": {
+        "performance": 3607.493,
+        "peak_flow": 1.197,
+        "outfall_peak": 0.937,
+        "exceedance_steps": 668.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test T=25 D=9.1h": {
+        "performance": 1472985.336,
+        "peak_flow": 1.472,
+        "outfall_peak": 1.163,
+        "exceedance_steps": 4421.0,
+        "flood_volume_m3": 14164.887,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test T=100 D=8.2h": {
+        "performance": 2695922.414,
+        "peak_flow": 1.472,
+        "outfall_peak": 1.256,
+        "exceedance_steps": 4955.0,
+        "flood_volume_m3": 26044.577,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.475
+      },
+      "test T=100 D=8.9h": {
+        "performance": 2680565.333,
+        "peak_flow": 1.472,
+        "outfall_peak": 1.272,
+        "exceedance_steps": 5078.0,
+        "flood_volume_m3": 25766.862,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.661
+      },
+      "test double-peak": {
+        "performance": 6468.201,
+        "peak_flow": 1.286,
+        "outfall_peak": 0.881,
+        "exceedance_steps": 896.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test back-to-back": {
+        "performance": 352699.008,
+        "peak_flow": 1.472,
+        "outfall_peak": 1.346,
+        "exceedance_steps": 5743.0,
+        "flood_volume_m3": 2683.369,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.327
+      }
+    },
+    "per-basin (train)": {
+      "train T=1 D=6.2h": {
+        "performance": 0.0,
+        "peak_flow": 0.859,
+        "outfall_peak": 0.82,
+        "exceedance_steps": 0.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "train T=5 D=5.6h": {
+        "performance": 0.0,
+        "peak_flow": 0.967,
+        "outfall_peak": 0.932,
+        "exceedance_steps": 0.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.045
+      },
+      "train T=1 D=11.8h": {
+        "performance": 0.0,
+        "peak_flow": 0.876,
+        "outfall_peak": 0.856,
+        "exceedance_steps": 0.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test T=25 D=9.1h": {
+        "performance": 1398012.262,
+        "peak_flow": 1.126,
+        "outfall_peak": 1.126,
+        "exceedance_steps": 2955.0,
+        "flood_volume_m3": 13890.262,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.07
+      },
+      "test T=100 D=8.2h": {
+        "performance": 2749136.961,
+        "peak_flow": 1.238,
+        "outfall_peak": 1.238,
+        "exceedance_steps": 3884.0,
+        "flood_volume_m3": 26879.887,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 1.003
+      },
+      "test T=100 D=8.9h": {
+        "performance": 2815208.377,
+        "peak_flow": 1.25,
+        "outfall_peak": 1.25,
+        "exceedance_steps": 3982.0,
+        "flood_volume_m3": 27429.64,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 1.183
+      },
+      "test double-peak": {
+        "performance": 0.0,
+        "peak_flow": 0.859,
+        "outfall_peak": 0.829,
+        "exceedance_steps": 0.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test back-to-back": {
+        "performance": 759466.45,
+        "peak_flow": 1.263,
+        "outfall_peak": 1.263,
+        "exceedance_steps": 3651.0,
+        "flood_volume_m3": 6994.392,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.89
+      }
+    },
+    "local threshold": {
+      "train T=1 D=6.2h": {
+        "performance": 104.292,
+        "peak_flow": 1.006,
+        "outfall_peak": 1.003,
+        "exceedance_steps": 1967.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "train T=5 D=5.6h": {
+        "performance": 136702.163,
+        "peak_flow": 1.007,
+        "outfall_peak": 1.004,
+        "exceedance_steps": 2281.0,
+        "flood_volume_m3": 1365.653,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "train T=1 D=11.8h": {
+        "performance": 75.614,
+        "peak_flow": 1.003,
+        "outfall_peak": 1.002,
+        "exceedance_steps": 2065.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test T=25 D=9.1h": {
+        "performance": 1991956.358,
+        "peak_flow": 1.009,
+        "outfall_peak": 1.006,
+        "exceedance_steps": 3462.0,
+        "flood_volume_m3": 19917.53,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test T=100 D=8.2h": {
+        "performance": 3170752.979,
+        "peak_flow": 1.008,
+        "outfall_peak": 1.005,
+        "exceedance_steps": 3648.0,
+        "flood_volume_m3": 31053.025,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 1.492
+      },
+      "test T=100 D=8.9h": {
+        "performance": 3176679.003,
+        "peak_flow": 1.007,
+        "outfall_peak": 1.004,
+        "exceedance_steps": 3751.0,
+        "flood_volume_m3": 30843.567,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 1.991
+      },
+      "test double-peak": {
+        "performance": 123.841,
+        "peak_flow": 1.008,
+        "outfall_peak": 1.005,
+        "exceedance_steps": 1813.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test back-to-back": {
+        "performance": 965914.128,
+        "peak_flow": 1.007,
+        "outfall_peak": 1.004,
+        "exceedance_steps": 5326.0,
+        "flood_volume_m3": 9195.683,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 1.121
+      }
+    },
+    "MPPI + identified": {
+      "train T=1 D=6.2h": {
+        "performance": 104.574,
+        "peak_flow": 1.042,
+        "outfall_peak": 1.042,
+        "exceedance_steps": 119.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "train T=5 D=5.6h": {
+        "performance": 266.429,
+        "peak_flow": 1.077,
+        "outfall_peak": 1.033,
+        "exceedance_steps": 202.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "train T=1 D=11.8h": {
+        "performance": 156.371,
+        "peak_flow": 1.058,
+        "outfall_peak": 1.058,
+        "exceedance_steps": 100.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test T=25 D=9.1h": {
+        "performance": 268000.702,
+        "peak_flow": 2.428,
+        "outfall_peak": 1.722,
+        "exceedance_steps": 2018.0,
+        "flood_volume_m3": 160.062,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 2.359
+      },
+      "test T=100 D=8.2h": {
+        "performance": 301635.688,
+        "peak_flow": 2.952,
+        "outfall_peak": 2.539,
+        "exceedance_steps": 3099.0,
+        "flood_volume_m3": 25.917,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 2.075
+      },
+      "test T=100 D=8.9h": {
+        "performance": 375940.736,
+        "peak_flow": 2.833,
+        "outfall_peak": 2.735,
+        "exceedance_steps": 2735.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 2.363
+      },
+      "test double-peak": {
+        "performance": 133.239,
+        "peak_flow": 1.075,
+        "outfall_peak": 1.071,
+        "exceedance_steps": 87.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test back-to-back": {
+        "performance": 267573.249,
+        "peak_flow": 2.447,
+        "outfall_peak": 2.117,
+        "exceedance_steps": 2182.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 2.319
+      }
+    },
+    "MPPI + true model": {
+      "train T=1 D=6.2h": {
+        "performance": 220.526,
+        "peak_flow": 1.075,
+        "outfall_peak": 1.075,
+        "exceedance_steps": 149.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "train T=5 D=5.6h": {
+        "performance": 399.647,
+        "peak_flow": 1.099,
+        "outfall_peak": 1.024,
+        "exceedance_steps": 202.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "train T=1 D=11.8h": {
+        "performance": 156.371,
+        "peak_flow": 1.058,
+        "outfall_peak": 1.058,
+        "exceedance_steps": 100.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test T=25 D=9.1h": {
+        "performance": 199989.873,
+        "peak_flow": 2.562,
+        "outfall_peak": 2.228,
+        "exceedance_steps": 1978.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 1.565
+      },
+      "test T=100 D=8.2h": {
+        "performance": 364808.582,
+        "peak_flow": 2.939,
+        "outfall_peak": 2.517,
+        "exceedance_steps": 2611.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 2.604
+      },
+      "test T=100 D=8.9h": {
+        "performance": 399763.293,
+        "peak_flow": 2.789,
+        "outfall_peak": 2.307,
+        "exceedance_steps": 2858.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 2.639
+      },
+      "test double-peak": {
+        "performance": 90.608,
+        "peak_flow": 1.045,
+        "outfall_peak": 1.011,
+        "exceedance_steps": 86.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test back-to-back": {
+        "performance": 256868.98,
+        "peak_flow": 2.27,
+        "outfall_peak": 2.27,
+        "exceedance_steps": 2143.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 1.524
+      }
+    },
+    "per-basin (oracle)": {
+      "train T=1 D=6.2h": {
+        "performance": 0.0,
+        "peak_flow": 0.995,
+        "outfall_peak": 0.836,
+        "exceedance_steps": 0.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "train T=5 D=5.6h": {
+        "performance": 0.0,
+        "peak_flow": 0.961,
+        "outfall_peak": 0.932,
+        "exceedance_steps": 0.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.052
+      },
+      "train T=1 D=11.8h": {
+        "performance": 0.0,
+        "peak_flow": 0.995,
+        "outfall_peak": 0.879,
+        "exceedance_steps": 0.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test T=25 D=9.1h": {
+        "performance": 820346.0,
+        "peak_flow": 1.663,
+        "outfall_peak": 1.193,
+        "exceedance_steps": 4572.0,
+        "flood_volume_m3": 7541.381,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.045
+      },
+      "test T=100 D=8.2h": {
+        "performance": 1780093.257,
+        "peak_flow": 1.761,
+        "outfall_peak": 1.551,
+        "exceedance_steps": 4782.0,
+        "flood_volume_m3": 16673.717,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test T=100 D=8.9h": {
+        "performance": 1750285.124,
+        "peak_flow": 1.635,
+        "outfall_peak": 1.586,
+        "exceedance_steps": 4918.0,
+        "flood_volume_m3": 16335.023,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test double-peak": {
+        "performance": 0.0,
+        "peak_flow": 0.987,
+        "outfall_peak": 0.833,
+        "exceedance_steps": 0.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.0
+      },
+      "test back-to-back": {
+        "performance": 77808.152,
+        "peak_flow": 1.436,
+        "outfall_peak": 1.399,
+        "exceedance_steps": 5284.0,
+        "flood_volume_m3": 0.0,
+        "spill_volume_m3": 0.0,
+        "spill_fraction": 0.0,
+        "final_depth_max": 0.111
+      }
+    }
+  },
+  "mppi": {
+    "n_blocks": 36,
+    "block": 10,
+    "n_samples": 64,
+    "replan_every": 60,
+    "n_iters_first": 12,
+    "n_iters": 4,
+    "n_elite": 10,
+    "sigma": 0.1,
+    "sigma_level": 0.35,
+    "terminal_weight": 0.08
+  }
+}
