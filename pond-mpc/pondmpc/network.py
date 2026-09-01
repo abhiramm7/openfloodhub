@@ -74,6 +74,40 @@ class Network:
 
         return max(to_outfall(n) for n in self.order)
 
+    # -- fast state save/restore ------------------------------------------
+    def snapshot(self):
+        """Complete internal state, cheap to take and restore.
+
+        A planner needs thousands of rollouts per control step, so this
+        avoids deepcopy: it captures exactly the mutable state and nothing
+        else. Reach buffers and catchment stores are included because they
+        carry water that has left an upstream basin but not yet arrived --
+        the part of the state a controller cannot measure but a model must
+        track.
+        """
+        return (
+            [b.volume for b in self.basins.values()],
+            [(r._buffer.copy() if r._buffer is not None else None, r._storage)
+             for r in self.reaches],
+            [(c.cascade.storage.copy(), c._abstracted_mm)
+             for c in self.catchments.values()],
+            dict(self._pending), self.t, self.outfall_flow,
+        )
+
+    def restore(self, snap):
+        vols, reaches, catch, pending, t, outfall = snap
+        for b, v in zip(self.basins.values(), vols):
+            b.volume = v
+        for r, (buf, st) in zip(self.reaches, reaches):
+            r._buffer = None if buf is None else buf.copy()
+            r._storage = st
+        for c, (store, abstracted) in zip(self.catchments.values(), catch):
+            c.cascade.storage[:] = store
+            c._abstracted_mm = abstracted
+        self._pending = dict(pending)
+        self.t = t
+        self.outfall_flow = outfall
+
     # -- simulation -------------------------------------------------------
     def reset(self, init_depth=0.0):
         for b in self.basins.values():
