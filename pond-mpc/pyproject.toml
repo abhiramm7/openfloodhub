@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pond-mpc"
+version = "0.1.0"
+description = "Model-based distributed stormwater control: learned basin dynamics composed with identified reach routing"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+learn = ["torch>=2.2", "pysindy>=1.7"]
+swmm = ["pystorms", "pyswmm<2.0.0", "pyyaml>=5.3"]
+
+[tool.setuptools.packages.find]
+include = ["pondmpc*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
