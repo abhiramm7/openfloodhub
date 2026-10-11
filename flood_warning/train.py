@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 
 from .dataset import load_site_windows, PAST_STEPS, FUTURE_STEPS
 from .model import FloodCNN, nse_loss
-from .sites import BY_ID
+from .sites import BY_ID, REGIONS, sites_in
 
 REPO = Path(__file__).resolve().parents[1]
 CKPT_DIR = Path(__file__).resolve().parent / 'checkpoints'
@@ -127,5 +127,15 @@ def train_gauge(gauge_id: str, epochs: int = 20, batch_size: int = 64,
 
 if __name__ == '__main__':
     import sys
-    gauge = sys.argv[1] if len(sys.argv) > 1 else '01646500'
-    train_gauge(gauge)
+    # A gauge id trains that gauge; a region name trains every gauge in it.
+    arg = sys.argv[1] if len(sys.argv) > 1 else '01646500'
+    if arg not in REGIONS:
+        train_gauge(arg)
+    else:
+        for site in sites_in(arg):
+            # One dead feed (no cached data, no windows) must not stop the
+            # rest of the region from training.
+            try:
+                train_gauge(site['id'])
+            except Exception as e:
+                print(f'  ! {site["id"]} {site["short"]} FAILED: {e}')

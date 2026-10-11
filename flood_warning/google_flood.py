@@ -18,13 +18,15 @@ Put the key in `.env.local` as GOOGLE_FLOOD_API_KEY=... locally, and as a
 repo Actions secret of the same name for CI. Everything here degrades to a
 no-op when the key is absent.
 
-The Google gauge id for each USGS site is discovered once with
+The Google gauge id for each USGS site is discovered once per region with
 
-    .venv/bin/python -m flood_warning.google_flood
+    .venv/bin/python -m flood_warning.google_flood [region]
 
-which searches a bounding box around the gauge set, matches Google gauges to
-our sites by distance, and writes flood_warning/google_gauges.json (committed,
-like thresholds.json). Google's US gauges are HYBAS virtual points at basin
+which searches a bounding box around that region's gauges, matches Google
+gauges to our sites by distance, and merges the matches into
+flood_warning/google_gauges.json (committed, like thresholds.json). Entries
+for the region's sites are replaced; other regions' entries are kept.
+Google's US gauges are HYBAS virtual points at basin
 outlets, not USGS locations — the committed mapping was hand-verified by
 comparing Google's return-period thresholds and live forecast magnitudes
 against each site's own scale, so review before overwriting it with the
@@ -42,7 +44,7 @@ import urllib.request
 from pathlib import Path
 
 from .fetch import _http_get   # retried HTTP + .env.local side-load
-from .sites import SITES
+from .sites import DEFAULT_REGION, sites_in
 
 API = 'https://floodforecasting.googleapis.com/v1'
 MAPPING_PATH = Path(__file__).resolve().parent / 'google_gauges.json'
@@ -78,12 +80,13 @@ def _api(path: str, params: dict | None = None, body: dict | None = None) -> dic
 # One-time gauge discovery -> google_gauges.json
 # --------------------------------------------------------------------------
 
-def discover_gauges(pad: float = 0.3) -> dict[str, str]:
-    """Search a bounding box around the gauge set and match Google gauges to
-    our USGS sites — by id when Google embeds the USGS number, else by
-    nearest-within-2km. Returns {usgs_id: google_gauge_id}."""
-    lats = [s['lat'] for s in SITES]
-    lons = [s['lon'] for s in SITES]
+def discover_gauges(region: str = DEFAULT_REGION, pad: float = 0.3) -> dict[str, str]:
+    """Search a bounding box around one region's gauges and match Google
+    gauges to our USGS sites — by id when Google embeds the USGS number, else
+    by nearest-within-2km. Returns {usgs_id: google_gauge_id}."""
+    sites = sites_in(region)
+    lats = [s['lat'] for s in sites]
+    lons = [s['lon'] for s in sites]
     lo_lat, hi_lat = min(lats) - pad, max(lats) + pad
     lo_lon, hi_lon = min(lons) - pad, max(lons) + pad
     box = [(lo_lat, lo_lon), (lo_lat, hi_lon), (hi_lat, hi_lon), (hi_lat, lo_lon)]
@@ -96,7 +99,7 @@ def discover_gauges(pad: float = 0.3) -> dict[str, str]:
     print(f'Google gauges in box: {len(gauges)}')
 
     mapping = {}
-    for site in SITES:
+    for site in sites:
         best, best_d = None, MATCH_DEG
         for g in gauges:
             gid = g.get('gaugeId', '')
@@ -212,9 +215,14 @@ if __name__ == '__main__':
     if not API_KEY:
         raise SystemExit('GOOGLE_FLOOD_API_KEY not set — add it to .env.local '
                          '(see module docstring for how to get one)')
-    mapping = discover_gauges()
+    import sys
+    region = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_REGION
+    mapping = discover_gauges(region)
     if mapping:
-        MAPPING_PATH.write_text(json.dumps(mapping, indent=2) + '\n')
+        region_ids = {s['id'] for s in sites_in(region)}
+        merged = {u: g for u, g in load_mapping().items() if u not in region_ids}
+        merged.update(mapping)
+        MAPPING_PATH.write_text(json.dumps(merged, indent=2) + '\n')
         print(f'wrote {MAPPING_PATH}')
     else:
         print('no matches found — nothing written')

@@ -13,11 +13,15 @@ import torch
 
 from .dataset import PAST_STEPS, FUTURE_STEPS, Scaler, encode_window
 from .model import FloodCNN
-from .sites import SITES, BY_ID
+from .sites import BY_ID, DEFAULT_REGION, REGIONS, sites_in
 
 REPO = Path(__file__).resolve().parents[1]
 CKPT_DIR = Path(__file__).resolve().parent / 'checkpoints'
-OUT_PATH = REPO / 'outputs' / 'dmv-cnn-12h' / 'preds.json'
+
+
+def out_path(region: str) -> Path:
+    """outputs/<model_id>/preds.json — one file per region."""
+    return REPO / 'outputs' / REGIONS[region]['model_id'] / 'preds.json'
 
 
 def predict_gauge(gauge_id: str) -> dict | None:
@@ -156,18 +160,24 @@ def backtest_gauge(model, scaler, cfg, df: pd.DataFrame, days_back: int = 7,
     return out
 
 
-def run_all():
-    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+def run_all(region: str = DEFAULT_REGION):
+    sites = [s for s in sites_in(region)
+             if (CKPT_DIR / f'{s["id"]}.pt').exists()]
+    if not sites:
+        # Region registered but not trained yet: write nothing, so the map
+        # keeps whatever it had instead of switching to an empty region.
+        print(f'No trained checkpoints for region {region!r} — nothing to '
+              f'predict (run `python -m flood_warning.train {region}`)')
+        return
+    out = out_path(region)
+    out.parent.mkdir(parents=True, exist_ok=True)
     from . import thresholds
     thresh = thresholds.load()
     if not thresh:
         print('  (no thresholds.json — run `python -m flood_warning.thresholds`)')
     preds = []
-    print('Live CNN inference:')
-    for site in SITES:
-        ckpt = CKPT_DIR / f'{site["id"]}.pt'
-        if not ckpt.exists():
-            continue
+    print(f'Live CNN inference ({REGIONS[region]["name"]}):')
+    for site in sites:
         try:
             p = predict_gauge(site['id'])
         except Exception as e:
@@ -246,15 +256,18 @@ def run_all():
                       f'forecast={len(g.get("forecast", []))}pts unit={g.get("unit")}')
     elif google_flood.API_KEY:
         print('Google Flood Hub overlays: no mapped gauges '
-              '(run `python -m flood_warning.google_flood` once to discover)')
+              f'(run `python -m flood_warning.google_flood {region}` once to discover)')
 
-    OUT_PATH.write_text(json.dumps({
-        'model_id': 'dmv-cnn-12h',
+    reg = REGIONS[region]
+    out.write_text(json.dumps({
+        'model_id': reg['model_id'],
+        'region': {'id': region, 'name': reg['name'], 'marquee': reg['marquee']},
         'updated': pd.Timestamp.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
         'predictions': preds,
     }, separators=(',', ':')))
-    print(f'\nwrote {OUT_PATH}')
+    print(f'\nwrote {out}')
 
 
 if __name__ == '__main__':
-    run_all()
+    import sys
+    run_all(sys.argv[1] if len(sys.argv) > 1 else DEFAULT_REGION)

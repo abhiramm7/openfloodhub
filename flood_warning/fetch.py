@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .sites import SITES, BY_ID
+from .sites import BY_ID, sites_in
 
 REPO = Path(__file__).resolve().parents[1]
 # Cached hourly observations + forcings. Override with $FLOOD_DATA_DIR.
@@ -159,10 +159,12 @@ def fetch_site(site: dict, years_back: int = 3) -> pd.DataFrame:
     return df
 
 
-def fetch_all(years_back: int = 3):
+def fetch_all(years_back: int = 3, region: str | None = None):
+    """Cache every site of `region` (all regions when None)."""
+    sites = sites_in(region)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    print(f'Fetching {len(SITES)} sites × {years_back} years hourly...')
-    for site in SITES:
+    print(f'Fetching {len(sites)} sites × {years_back} years hourly...')
+    for site in sites:
         try:
             fetch_site(site, years_back=years_back)
         except Exception as e:
@@ -232,4 +234,5 @@ def fetch_hourly_live(gauge_id: str, days_back: int = 8) -> pd.DataFrame:
 
 
 if __name__ == '__main__':
-    fetch_all(years_back=3)
+    import sys
+    fetch_all(years_back=3, region=sys.argv[1] if len(sys.argv) > 1 else None)

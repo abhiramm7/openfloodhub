@@ -17,7 +17,7 @@ Danger/Extreme banding that matches each gauge's own behavior.
 Run once (slow — pulls multi-year USGS flow per gauge) and cache to
 thresholds.json, which predict.py reads on every inference run:
 
-    python -m flood_warning.thresholds
+    python -m flood_warning.thresholds [region]
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from pathlib import Path
 import pandas as pd
 
 from .fetch import fetch_usgs_hourly
-from .sites import SITES
+from .sites import BY_ID, sites_in
 
 THRESH_PATH = Path(__file__).resolve().parent / 'thresholds.json'
 MIN_DAYS = 365
@@ -59,11 +59,14 @@ def load() -> dict:
     return {}
 
 
-def build_all(years_back: int = 3) -> dict:
-    """Compute thresholds for every site and write thresholds.json."""
-    out = {}
+def build_all(years_back: int = 3, region: str | None = None) -> dict:
+    """Compute thresholds for every site of `region` (all regions when None)
+    and merge them into thresholds.json. Other regions' entries, and a site's
+    previous entry when its fetch fails this time, are kept; ids no longer in
+    sites.py are dropped."""
+    out = {k: v for k, v in load().items() if k in BY_ID}
     print(f'Computing flood thresholds from {years_back}y of daily peaks...')
-    for site in SITES:
+    for site in sites_in(region):
         try:
             th = compute_thresholds(site['id'], years_back=years_back)
         except Exception as e:
@@ -82,4 +85,5 @@ def build_all(years_back: int = 3) -> dict:
 
 
 if __name__ == '__main__':
-    build_all()
+    import sys
+    build_all(region=sys.argv[1] if len(sys.argv) > 1 else None)
