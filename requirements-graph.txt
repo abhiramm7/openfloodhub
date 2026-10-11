@@ -1,0 +1,6 @@
+# Extra deps for the research graph path (flood_warning/basin_graph.py and the
+# rain -> flow graph fit). Not needed by the live forecast or CI.
+pysheds==0.5
+rasterio>=1.4
+matplotlib>=3.8
+modpods==1.3.0

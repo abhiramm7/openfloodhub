@@ -35,6 +35,8 @@ cd web && python3 -m http.server 8772
 Everything is in the `flood_warning/` package (module scripts, each with a `__main__`):
 `sites.py` (gauge registry: id/lat/lon/drainage/kind) · `fetch.py` (USGS NWIS + Open-Meteo) · `dataset.py` (windowing + `Scaler`) · `model.py` (`FloodCNN`) · `train.py` · `predict.py` · `thresholds.py` · `noaa.py` (comparison overlays) · `google_flood.py` (Google Flood Hub overlays + `google_gauges.json` mapping).
 
+Research path (not used by `predict.py` or CI; extra deps in `requirements-graph.txt`): `basin_graph.py` (pysheds river graph above an outlet gauge: subcatchment nodes, land-use travel times, node→gauge travel-time kernels → committed `graphs/<outlet>.json`) · `graph_fit.py` (fits rain→flow over that graph from per-node Open-Meteo rain; optional modpods topology check).
+
 ## Gotchas
 
 - **The past stream is 4 channels, not 3.** `dataset.py` feeds `[flow, precip, temp, soil_moisture]` (24h). The 4th channel is ERA5-Land surface soil moisture (antecedent-wetness proxy). `model.py`'s docstring still says "3 channels" but its default is `n_past_features=4` — trust the code. Future stream is 1 channel (`precip`, 12h). Target is 12-step flow.
@@ -47,6 +49,7 @@ Everything is in the `flood_warning/` package (module scripts, each with a `__ma
 - **Anacostia at Kenilworth (01651760) is tidal — negative discharge is real** (flow reverses on flood tide, ~5-6h stretches twice a day). `fetch.py` keeps negative 15-min readings in the hourly mean and floors the hour at 0. Don't "fix" this by dropping negatives: that punches recurring multi-hour holes in the record, and the NaN guard in `dataset.py::encode_window` then refuses every live window for the gauge.
 - **Flow gap-filling happens exactly once, in fetch** (`interpolate(limit=4, limit_area='inside')`). `encode_window` deliberately does no flow filling — a leftover NaN means real missing data and the window is refused. Don't add a second interpolate pass downstream (it doubles the tolerated gap) and keep `limit_area='inside'` (without it, `fetch_hourly_live`'s forecast-extended index gets the last USGS reading held forward as fake observations).
 - **Sites that fail to fetch get an "offline" stub** in preds.json (`status: 'offline'`, empty `series`/`backtest`) so the map shows a gray marker — don't "clean up" the stub logic in `predict.py::run_all`. Rock Creek (01648000) has had a dead USGS feed since before launch and lives permanently in this state.
+- **`basin_graph.py` DEM conditioning:** pysheds' default `resolve_flats` eps (1e-5) plants thousands of new pits on Iowa's broad filled flats (one cut the Turkey basin to a fifth of its area) — keep the float64 DEM, `FLAT_EPS=1e-7` and the repeat fill/resolve passes. The clipping check tests the catchment against the UTM grid's nodata rim, not the grid border. Land cover is ESA WorldCover (S3) because MRLC/NLCD hosts aren't reachable from every environment.
 - **Thresholds are flow-based (m³/s), derived from each gauge's own daily-peak distribution** as return-period stand-ins — not NWS stage-height categories (a discharge model can't speak feet).
 
 ## Data flow & CI
