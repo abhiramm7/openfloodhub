@@ -528,26 +528,6 @@ def plot_graph(outlet_id: str):
     ax.add_collection(LineCollection(segs, colors=INK, linewidths=widths, capstyle='round'))
 
     from rasterio.warp import transform as wt
-    # Labels: first of four offsets whose (approximate) box clears the boxes
-    # already placed, so neighbouring gauges like Garber/Littleport don't stack.
-    km_per_pt = (x1 - x0) / (fig.get_size_inches()[0] * 72 * 0.8)
-    placed = []
-    for g in sorted(graph['gauges'], key=lambda g: -g['usgs_area_km2']):
-        gx, gy = wt('EPSG:4326', CRS, [g['lonlat'][0]], [g['lonlat'][1]])
-        px, py = gx[0] / 1000, gy[0] / 1000
-        ax.plot(px, py, 'o', ms=8, mfc='white', mec=INK, mew=1.6, zorder=5)
-        wdt, hgt = len(g['short']) * 5.2 * km_per_pt, 11 * km_per_pt
-        for ox, oy, ha in ((6, 5, 'left'), (6, -14, 'left'), (-6, 5, 'right'), (-6, -14, 'right')):
-            bx = px + ox * km_per_pt - (wdt if ha == 'right' else 0)
-            by = py + oy * km_per_pt
-            box = (bx, by, bx + wdt, by + hgt)
-            if not any(box[0] < b[2] and b[0] < box[2] and box[1] < b[3] and b[1] < box[3]
-                       for b in placed):
-                break
-        placed.append(box)
-        ax.annotate(g['short'], (px, py), xytext=(ox, oy), ha=ha,
-                    textcoords='offset points', color=INK, fontsize=8.5, zorder=6,
-                    bbox=dict(boxstyle='round,pad=0.15', fc='white', ec='none', alpha=0.8))
     ax.set_xlim(x0, x1); ax.set_ylim(y0, y1)
     ax.set_xlabel('UTM 15N easting (km)'); ax.set_ylabel('northing (km)')
     ax.set_title(f'Travel time to {BY_ID[outlet_id]["name"]} (h), '
@@ -556,7 +536,37 @@ def plot_graph(outlet_id: str):
     cb.set_label('hours to outlet', color=INK_2); cb.outline.set_visible(False)
     for s_ in ax.spines.values():
         s_.set_visible(False)
-    fig.tight_layout()
+    fig.tight_layout()       # settle the layout first: label placement needs final boxes
+    # Labels: first of four offsets whose rendered box stays inside the map
+    # and clears the boxes already placed (Garber and Littleport are close).
+    renderer = fig.canvas.get_renderer()
+    axbox = ax.get_window_extent(renderer)
+    from matplotlib.transforms import Bbox
+    pts = {}
+    for g in graph['gauges']:
+        gx, gy = wt('EPSG:4326', CRS, [g['lonlat'][0]], [g['lonlat'][1]])
+        pts[g['id']] = (gx[0] / 1000, gy[0] / 1000)
+        ax.plot(*pts[g['id']], 'o', ms=8, mfc='white', mec=INK, mew=1.6, zorder=5)
+    placed = []                          # marker boxes count as occupied too
+    for px, py in pts.values():
+        dx, dy = ax.transData.transform((px, py))
+        placed.append(Bbox([[dx - 9, dy - 9], [dx + 9, dy + 9]]))
+    candidates = ((7, 5, 'left'), (7, -15, 'left'), (-7, 5, 'right'), (-7, -15, 'right'),
+                  (0, 11, 'center'), (0, -21, 'center'))
+    for g in sorted(graph['gauges'], key=lambda g: -g['usgs_area_km2']):
+        px, py = pts[g['id']]
+        for ox, oy, ha in candidates:
+            ann = ax.annotate(g['short'], (px, py), xytext=(ox, oy), ha=ha,
+                              textcoords='offset points', color=INK, fontsize=8.5, zorder=6,
+                              bbox=dict(boxstyle='round,pad=0.15', fc='white', ec='none',
+                                        alpha=0.8))
+            box = ann.get_window_extent(renderer).expanded(1.05, 1.15)
+            inside = (axbox.x0 <= box.x0 and box.x1 <= axbox.x1
+                      and axbox.y0 <= box.y0 and box.y1 <= axbox.y1)
+            if inside and not any(box.overlaps(b) for b in placed):
+                break
+            ann.remove()
+        placed.append(box)
     fig.savefig(out_dir / 'travel_time_map.png'); plt.close(fig)
 
     # Time-area histogram by land-cover group.
